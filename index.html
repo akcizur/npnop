@@ -83,7 +83,7 @@ const CFG = {
 const state = {
   inputMode:'keyboard', active:true, paused:false, demo:false, onFloor:true, velocity:null, visualYaw:0,
   cam:{yaw:0,pitch:-0.14,trauma:0}, haptics:null, audio:null, selectedCamera:'shoulder', anim:'idle', stepAccum:0, stepPhase:0, lastImpact:0,
-  touchMove:{x:0,y:0,mag:0,run:false}, touchLook:{x:0,y:0}, keyboard:{}, gamepad:null, mouseDX:0,mouseDY:0, wasOnFloor:true
+  touchMove:{x:0,y:0,mag:0,run:false},touchSprintToggle:false, touchLook:{x:0,y:0}, keyboard:{}, gamepad:null, mouseDX:0,mouseDY:0, wasOnFloor:true
 };
 const refs = {};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -193,7 +193,7 @@ function setupTouch(){
 function readInput(){
   let ix=0,iz=0,mag=0,run=false,jumpNow=false;
   if(state.inputMode==='touch'){
-    ix=state.touchMove.x;iz=state.touchMove.y;mag=state.touchMove.mag;run=state.touchMove.run;
+    ix=state.touchMove.x;iz=state.touchMove.y;mag=state.touchMove.mag;run=state.touchMove.run||state.touchSprintToggle;
   }else{
     ix=(state.keyboard.KeyD||state.keyboard.ArrowRight?1:0)-(state.keyboard.KeyA||state.keyboard.ArrowLeft?1:0);iz=(state.keyboard.KeyS||state.keyboard.ArrowDown?1:0)-(state.keyboard.KeyW||state.keyboard.ArrowUp?1:0);mag=Math.min(1,Math.hypot(ix,iz));if(mag>0){ix/=mag;iz/=mag}run=!!state.keyboard.ShiftLeft||!!state.keyboard.ShiftRight;
   }
@@ -222,10 +222,10 @@ function capsuleVsOBB(pos,R,H,box){
   return null;
 }
 function resolveCollisions(){
-  state.onFloor=false;let iterations=0;while(iterations++<4){let hit=null;for(const box of obbBoxes){const c=capsuleVsOBB(player.position,CFG.playerRadius,CFG.playerHeight,box);if(c&&(!hit||c.depth>hit.depth))hit=c}if(!hit)break;player.position.addScaledVector(hit.normal,hit.depth+.002);if(hit.type==='top'){state.onFloor=true;state.velocity.y=0;if(!state.wasOnFloor)landing(Math.abs(state.velocity.y))}else if(hit.type==='bottom'){state.velocity.y=0}else{const vn=state.velocity.dot(hit.normal);if(vn<0)state.velocity.addScaledVector(hit.normal,-vn);if(Math.abs(vn)>1.35&&performance.now()-state.lastImpact>240){state.cam.trauma=Math.max(state.cam.trauma,clamp((Math.abs(vn)-1)/6,0,.85)*CFG.shakeIntensity);state.lastImpact=performance.now()}}}
+  state.onFloor=false;let iterations=0;while(iterations++<4){let hit=null;for(const box of obbBoxes){const c=capsuleVsOBB(player.position,CFG.playerRadius,CFG.playerHeight,box);if(c&&(!hit||c.depth>hit.depth))hit=c}if(!hit)break;player.position.addScaledVector(hit.normal,hit.depth+.002);if(hit.type==='top'){state.onFloor=true;state.velocity.y=0;if(!state.wasOnFloor)landing(Math.abs(state.velocity.y))}else if(hit.type==='bottom'){state.velocity.y=0}else{const vn=state.velocity.dot(hit.normal);if(vn<0)state.velocity.addScaledVector(hit.normal,-vn);if(Math.abs(vn)>1.35&&performance.now()-state.lastImpact>240){const t=clamp((Math.abs(vn)-1)/6,0,.85)*CFG.shakeIntensity;state.cam.trauma=Math.max(state.cam.trauma,t);rumble(t);state.lastImpact=performance.now()}}}
   if(player.position.y<=0){if(!state.onFloor&&state.velocity.y<0){}if(!state.onFloor&&state.wasOnFloor===false&&state.velocity.y<0){}state.onFloor=true;if(player.position.y<0)player.position.y=0;if(state.velocity.y<0){const fall=Math.abs(state.velocity.y);state.velocity.y=0;if(!state.wasOnFloor)landing(fall)}}
 }
-function landing(speed){state.cam.trauma=Math.max(state.cam.trauma,clamp((speed-1)/8.5,0,1)*CFG.shakeIntensity);playLand(speed)}
+function rumble(t){const gp=state.gamepad;if(!gp?.vibrationActuator?.playEffect)return;try{gp.vibrationActuator.playEffect('dual-rumble',{duration:180,strongMagnitude:clamp(t,0,1),weakMagnitude:clamp(t*.6,0,1)})}catch{}}\nfunction landing(speed){const t=clamp((speed-1)/8.5,0,1)*CFG.shakeIntensity;state.cam.trauma=Math.max(state.cam.trauma,t);playLand(speed);rumble(t)}
 function updatePlayer(dt){
   if(state.paused)return;const inp=readInput();if(inp.jumpNow)jump();const speed=(inp.run?CFG.running:CFG.walking)*inp.mag;const dir=worldDir(inp.ix,inp.iz);if(inp.mag>0.01){state.velocity.x=dir.x*speed;state.velocity.z=dir.z*speed}else{state.velocity.x=damp(state.velocity.x,0,12,dt);state.velocity.z=damp(state.velocity.z,0,12,dt)}
   if(!state.onFloor)state.velocity.y-=CFG.gravity*dt;else if(state.velocity.y<0)state.velocity.y=0;player.position.x+=state.velocity.x*dt;player.position.y+=state.velocity.y*dt;player.position.z+=state.velocity.z*dt;resolveCollisions();const h=Math.hypot(state.velocity.x,state.velocity.z);if(!state.onFloor)state.anim=state.anim==='kick'||state.anim==='knock_down'||state.anim==='get_up'?state.anim:'air';else if(h>CFG.runSpeedThreshold)state.anim='run';else if(h>CFG.walkSpeedThreshold)state.anim='walk';else if(!['kick','knock_down','get_up'].includes(state.anim))state.anim='idle';
