@@ -83,7 +83,7 @@ const CFG = {
 const state = {
   inputMode:'keyboard', active:true, paused:false, demo:false, onFloor:true, velocity:null, visualYaw:0,
   cam:{yaw:0,pitch:-0.14,trauma:0}, haptics:null, audio:null, selectedCamera:'shoulder', anim:'idle', stepAccum:0, stepPhase:0, lastImpact:0,
-  touchMove:{x:0,y:0,mag:0,run:false},touchSprintToggle:false, touchLook:{x:0,y:0}, keyboard:{}, gamepad:null, mouseDX:0,mouseDY:0, wasOnFloor:true
+  touchMove:{x:0,y:0,mag:0,run:false},touchSprintToggle:false, touchLook:{x:0,y:0}, keyboard:{}, gamepad:null, mouseDX:0,mouseDY:0,lookMomentumX:0,lookMomentumY:0,actionUntil:0, wasOnFloor:true
 };
 const refs = {};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -187,7 +187,7 @@ function setupTouch(){
   const move=refs.moveStick, left=refs.leftZone;let pointerId=null,ox=0,oy=0;
   left.addEventListener('pointerdown',e=>{if(e.clientX>innerWidth*.48)return;inputActive('touch');pointerId=e.pointerId;ox=e.clientX;oy=e.clientY;move.style.display='block';move.style.left=clamp(ox-55,10,innerWidth-120)+'px';move.style.top=clamp(oy-55,10,innerHeight-120)+'px';move.setPointerCapture(pointerId);updateMove(e)});
   left.addEventListener('pointermove',e=>{if(e.pointerId===pointerId)updateMove(e)});left.addEventListener('pointerup',endMove);left.addEventListener('pointercancel',endMove);function updateMove(e){const dx=e.clientX-ox,dy=e.clientY-oy,r=55,m=Math.min(1,Math.hypot(dx,dy)/r),ang=Math.atan2(dy,dx);state.touchMove.x=Math.cos(ang)*m;state.touchMove.y=Math.sin(ang)*m;state.touchMove.mag=m;state.touchMove.run=m>.78}function endMove(){pointerId=null;state.touchMove.x=state.touchMove.y=state.touchMove.mag=0;state.touchMove.run=false;move.style.display='none'}
-  let lastX=0,lastY=0,lookId=null;refs.lookPad.addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.48)return;inputActive('touch');lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;refs.lookPad.setPointerCapture(lookId)});refs.lookPad.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;state.mouseDX+=(e.clientX-lastX)*.8;state.mouseDY+=(e.clientY-lastY)*.8;lastX=e.clientX;lastY=e.clientY});refs.lookPad.addEventListener('pointerup',()=>lookId=null);refs.lookPad.addEventListener('pointercancel',()=>lookId=null);
+  let lastX=0,lastY=0,lookId=null;refs.lookPad.addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.48)return;inputActive('touch');lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;refs.lookPad.setPointerCapture(lookId)});refs.lookPad.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;state.mouseDX+=dx*.55;state.mouseDY+=dy*.55;state.lookMomentumX=dx*.55;state.lookMomentumY=dy*.55;lastX=e.clientX;lastY=e.clientY});refs.lookPad.addEventListener('pointerup',()=>lookId=null);refs.lookPad.addEventListener('pointercancel',()=>lookId=null);
   refs.jumpBtn.onclick=jump;refs.kickBtn.onclick=kick;refs.runBtn.onclick=()=>{state.touchSprintToggle=!state.touchSprintToggle;refs.runBtn.style.background=state.touchSprintToggle?'rgba(255,154,69,.22)':''};refs.downBtn.onclick=knockDown;
 }
 function readInput(){
@@ -201,7 +201,7 @@ function readInput(){
   return {ix,iz,mag,run,jumpNow};
 }
 function applyCameraInput(dt){
-  if(state.paused)return;let dx=state.mouseDX,dy=state.mouseDY;state.mouseDX=state.mouseDY=0;
+  if(state.paused)return;let dx=state.mouseDX,dy=state.mouseDY;state.mouseDX=state.mouseDY=0;if(state.inputMode==='touch'){dx+=state.lookMomentumX;dy+=state.lookMomentumY;const decay=Math.pow(.9,dt*60);state.lookMomentumX*=decay;state.lookMomentumY*=decay}
   let sens=CFG.mouseSens;
   if(state.inputMode==='touch')sens=CFG.touchLookSens;
   if(state.inputMode==='gamepad'&&state.gamepad){const gp=state.gamepad;const rx=Math.abs(gp.axes?.[2]||0)<.12?0:(gp.axes?.[2]||0),ry=Math.abs(gp.axes?.[3]||0)<.12?0:(gp.axes?.[3]||0);dx-=rx*2.4*dt/sens;dy-=ry*2.0*dt/sens}
@@ -209,10 +209,10 @@ function applyCameraInput(dt){
 }
 
 function jump(){if(state.paused||!state.onFloor)return;state.velocity.y=CFG.jump;state.onFloor=false;state.anim='air';playJump()}
-function kick(){state.anim='kick';setTimeout(()=>{if(state.anim==='kick')state.anim='idle'},600);playTone(220,.08,.16)}
-function knockDown(){state.anim='knock_down';state.velocity.set(0,-1.5,0);setTimeout(()=>{if(state.anim==='knock_down')getUp()},900)}
-function getUp(){state.anim='get_up';state.velocity.y=0;setTimeout(()=>{state.anim='idle'},800)}
-function resetPlayer(){player.position.set(0,0,5);state.velocity.set(0,0,0);state.onFloor=true;state.wasOnFloor=true;state.touchSprintToggle=false;state.cam.yaw=0;state.cam.pitch=-.14;state.visualYaw=0;state.anim='idle';visuals.rotation.set(0,0,0);if(refs.runBtn)refs.runBtn.style.background=''}
+function kick(){if(state.paused)return;state.anim='kick';state.actionUntil=performance.now()+600;setTimeout(()=>{if(state.anim==='kick')state.anim='idle';state.actionUntil=0},600);playTone(220,.08,.16)}
+function knockDown(){if(state.paused)return;state.anim='knock_down';state.actionUntil=performance.now()+900;state.velocity.set(0,-1.5,0);setTimeout(()=>{if(state.anim==='knock_down')getUp()},900)}
+function getUp(){if(state.paused)return;state.anim='get_up';state.actionUntil=performance.now()+800;state.velocity.y=0;setTimeout(()=>{if(state.anim==='get_up'){state.anim='idle';state.actionUntil=0}},800)}
+function resetPlayer(){player.position.set(0,0,5);state.velocity.set(0,0,0);state.onFloor=true;state.wasOnFloor=true;state.touchSprintToggle=false;state.lookMomentumX=state.lookMomentumY=0;state.actionUntil=0;state.cam.yaw=0;state.cam.pitch=-.14;state.visualYaw=0;state.anim='idle';visuals.rotation.set(0,0,0);if(refs.runBtn)refs.runBtn.style.background=''}
 
 function worldDir(ix,iz){const yaw=state.cam.yaw;const fx=Math.sin(yaw+Math.PI),fz=Math.cos(yaw+Math.PI),rx=-fz,rz=fx;return new THREE.Vector3(ix*rx-iz*fx,0,ix*rz-iz*fz)}
 function rotateXZ(v,yaw){const c=Math.cos(yaw),s=Math.sin(yaw);return new THREE.Vector3(v.x*c-v.z*s,v.y,v.x*s+v.z*c)}
@@ -230,7 +230,7 @@ function resolveCollisions(){
 function rumble(t){const gp=state.gamepad;if(!gp?.vibrationActuator?.playEffect)return;try{gp.vibrationActuator.playEffect('dual-rumble',{duration:180,strongMagnitude:clamp(t,0,1),weakMagnitude:clamp(t*.6,0,1)})}catch{}}function landing(speed){const t=clamp((speed-1)/8.5,0,1)*CFG.shakeIntensity;state.cam.trauma=Math.max(state.cam.trauma,t);playLand(speed);rumble(t)}
 function updatePlayer(dt){
   if(state.paused)return;const inp=readInput();if(inp.jumpNow)jump();const speed=(inp.run?CFG.running:CFG.walking)*inp.mag;const dir=worldDir(inp.ix,inp.iz);if(inp.mag>0.01){state.velocity.x=dir.x*speed;state.velocity.z=dir.z*speed}else{state.velocity.x=damp(state.velocity.x,0,12,dt);state.velocity.z=damp(state.velocity.z,0,12,dt)}
-  if(!state.onFloor)state.velocity.y-=CFG.gravity*dt;else if(state.velocity.y<0)state.velocity.y=0;player.position.x+=state.velocity.x*dt;player.position.y+=state.velocity.y*dt;player.position.z+=state.velocity.z*dt;resolveCollisions();const h=Math.hypot(state.velocity.x,state.velocity.z);if(!state.onFloor)state.anim=state.anim==='kick'||state.anim==='knock_down'||state.anim==='get_up'?state.anim:'air';else if(h>CFG.runSpeedThreshold)state.anim='run';else if(h>CFG.walkSpeedThreshold)state.anim='walk';else if(!['kick','knock_down','get_up'].includes(state.anim))state.anim='idle';
+  if(!state.onFloor)state.velocity.y-=CFG.gravity*dt;else if(state.velocity.y<0)state.velocity.y=0;player.position.x+=state.velocity.x*dt;player.position.y+=state.velocity.y*dt;player.position.z+=state.velocity.z*dt;resolveCollisions();const h=Math.hypot(state.velocity.x,state.velocity.z);const locked=performance.now()<state.actionUntil;if(!locked){if(!state.onFloor)state.anim='air';else if(h>CFG.runSpeedThreshold)state.anim='run';else if(h>CFG.walkSpeedThreshold)state.anim='walk';else state.anim='idle';}
   const visualWorldYaw=h>.03?Math.atan2(state.velocity.x,state.velocity.z):state.cam.yaw;const targetRel=visualWorldYaw-state.cam.yaw;state.visualYaw=lerpAngle(state.visualYaw,targetRel,1-Math.exp(-CFG.visualsRot*dt));player.rotation.y=state.cam.yaw;visuals.rotation.y=state.visualYaw;animateVisuals(dt,h);
   updateFootAudio(dt,h,inp.run);state.wasOnFloor=state.onFloor;
 }
