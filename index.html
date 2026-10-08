@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="theme-color" content="#0b0f14" />
+<meta name="description" content="Third-person controller web sandbox — Three.js, multi-input, procedural world." />
+<title>NPnop — Third Person Controller Web Sandbox</title>
+<style>
+:root{color-scheme:dark;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--panel:rgba(10,14,19,.84);--line:rgba(255,255,255,.12);--muted:rgba(255,255,255,.6);--text:#f5f7fb;--accent:#ff9a45;--ok:#68d391}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#05080b;color:var(--text)}body{touch-action:none;overscroll-behavior:none}
+button,input{font:inherit}button{color:inherit}
+#app{position:fixed;inset:0;overflow:hidden;background:#05080b}canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;inset:0;pointer-events:none}
+.hud-top{position:absolute;left:16px;right:16px;top:16px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.badge{padding:8px 10px;border:1px solid var(--line);background:rgba(5,8,11,.52);backdrop-filter:blur(8px);border-radius:999px;font-size:11px;letter-spacing:.04em}
+.badge strong{color:var(--accent)}
+#radarWrap{position:absolute;right:16px;bottom:16px;width:180px;height:180px;padding:0;border:1px solid var(--line);background:rgba(5,8,11,.52);backdrop-filter:blur(8px);border-radius:18px;overflow:hidden;pointer-events:none}
+#radar{width:100%;height:100%;display:block}
+#crosshair{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);opacity:.7}
+#crosshair::before,#crosshair::after{content:"";position:absolute;background:rgba(255,255,255,.75)}#crosshair::before{left:8px;top:0;width:1px;height:18px}#crosshair::after{left:0;top:8px;width:18px;height:1px}
+#fps{position:absolute;top:58px;left:16px;color:var(--muted);font-size:10px;pointer-events:none}
+#panel{position:fixed;top:16px;left:16px;width:min(340px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:14px;border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(14px);border-radius:16px;display:none;pointer-events:auto;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.panel-title{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;margin-bottom:10px}.panel-title span{color:var(--accent)}
+.row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:9px 0;font-size:11px}.row output{color:var(--muted);min-width:74px;text-align:right}.row input[type=range]{grid-column:1 / -1;width:100%}
+.sep{height:1px;background:var(--line);margin:12px 0}.hint{font-size:10px;line-height:1.5;color:var(--muted)}
+.btn{appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.06);border-radius:10px;padding:8px 10px;cursor:pointer}.btn:hover{background:rgba(255,255,255,.1)}
+#menuBtn{position:fixed;right:16px;top:16px;z-index:20;pointer-events:auto;width:40px;height:40px;padding:0;border-radius:50%;background:rgba(5,8,11,.52);backdrop-filter:blur(8px)}
+#entry{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:30;background:radial-gradient(circle at 50% 35%,rgba(61,85,105,.28),rgba(5,8,11,.97) 58%);pointer-events:auto}
+.entry-card{width:min(560px,calc(100vw - 32px));padding:26px;border:1px solid var(--line);background:rgba(5,8,11,.74);backdrop-filter:blur(16px);border-radius:20px;box-shadow:0 20px 70px rgba(0,0,0,.45)}
+.entry-card h1{margin:0 0 8px;font-size:20px}.entry-card p{margin:0 0 18px;font-size:11px;line-height:1.65;color:var(--muted)}.entry-card .actions{display:flex;gap:8px;flex-wrap:wrap}.primary{border-color:rgba(255,154,69,.45);background:rgba(255,154,69,.12)}
+#gameMenu{position:fixed;inset:0;z-index:25;display:none;align-items:center;justify-content:center;background:rgba(5,8,11,.58);backdrop-filter:blur(10px);pointer-events:auto}
+.menu-card{width:min(360px,calc(100vw - 32px));padding:18px;border:1px solid var(--line);background:var(--panel);border-radius:18px}.menu-card h2{font-size:14px;margin:0 0 12px}.menu-list{display:grid;gap:8px}.menu-list .btn{text-align:left}
+#touch{position:fixed;inset:0;z-index:15;display:none;pointer-events:none}.touch-zone{position:absolute;inset:0;pointer-events:auto}.joystick{position:absolute;width:110px;height:110px;border:2px solid rgba(255,255,255,.18);border-radius:50%;background:rgba(0,0,0,.16);display:none}.joystick .knob{position:absolute;width:52px;height:52px;left:29px;top:29px;border-radius:50%;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22)}
+#lookPad{position:absolute;left:50%;right:0;top:0;bottom:0;pointer-events:auto}.touch-btn{position:absolute;border:1px solid rgba(255,255,255,.16);background:rgba(5,8,11,.32);backdrop-filter:blur(6px);border-radius:50%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;user-select:none;pointer-events:auto}.touch-btn:active{background:rgba(255,154,69,.22)}
+#jumpBtn{right:24px;bottom:26px;width:72px;height:72px}.touch-btn.small{width:56px;height:56px}.touch-btn.tiny{width:52px;height:52px}#kickBtn{right:106px;bottom:28px}#runBtn{right:112px;bottom:96px}#downBtn{right:38px;bottom:112px}
+#debug{position:fixed;left:16px;bottom:16px;max-width:min(480px,calc(100vw - 220px));padding:8px 10px;font-size:10px;line-height:1.5;color:var(--muted);pointer-events:none;text-shadow:0 1px 4px #000}
+@media (max-width:700px){#radarWrap{transform:scale(.86);transform-origin:bottom right}#debug{max-width:calc(100vw - 32px);bottom:10px;left:10px}.hud-top{top:10px;left:10px;right:62px}.badge{font-size:9px;padding:6px 8px}.panel{max-width:calc(100vw - 20px)}#panel{top:10px;left:10px;max-height:calc(100vh - 20px)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div class="hud-top"><div class="badge">MODE <strong id="inputMode">keyboard</strong></div><div class="badge">STATE <strong id="stateLabel">idle</strong></div></div>
+  <div id="fps">FPS --</div>
+  <div id="crosshair"></div>
+  <div id="radarWrap"><svg id="radar" viewBox="0 0 180 180" aria-label="Radar"></svg></div>
+  <div id="debug"></div>
+</div>
+<button id="menuBtn" class="btn" aria-label="Game menu">☰</button>
+<div id="panel">
+  <div class="panel-title"><span>Inspector</span><button id="panelClose" class="btn">×</button></div>
+  <div class="row"><label for="s_walk">Walking</label><output id="o_walk"></output><input id="s_walk" type="range" min="1" max="8" step="0.1"></div>
+  <div class="row"><label for="s_run">Running</label><output id="o_run"></output><input id="s_run" type="range" min="2" max="14" step="0.1"></div>
+  <div class="row"><label for="s_jump">Jump</label><output id="o_jump"></output><input id="s_jump" type="range" min="2" max="12" step="0.1"></div>
+  <div class="row"><label for="s_grav">Gravity</label><output id="o_grav"></output><input id="s_grav" type="range" min="2" max="25" step="0.1"></div>
+  <div class="row"><label for="s_shake">Shake</label><output id="o_shake"></output><input id="s_shake" type="range" min="0" max="2.5" step="0.05"></div>
+  <div class="row"><label for="s_vol">Volume</label><output id="o_vol"></output><input id="s_vol" type="range" min="0" max="1" step="0.05"></div>
+  <div class="sep"></div>
+  <div class="row"><label>Camera preset</label><select id="cameraPreset" class="btn"><option value="shoulder">Shoulder</option><option value="close">Close Action</option><option value="wide">Wide Chase</option><option value="tactical">High Tactical</option></select></div>
+  <div class="row"><label>GDScript</label><button id="exportGd" class="btn">Export .gd</button></div>
+  <div class="sep"></div><div class="hint">Desktop: click the scene for pointer lock. WASD / arrows move, Shift sprint, Space jump, F kick, K knock down, G get up, R reset, Esc releases pointer lock.</div>
+</div>
+<div id="gameMenu"><div class="menu-card"><h2>Game Menu</h2><div class="menu-list"><button class="btn" id="resumeBtn">Resume</button><button class="btn" id="restartBtn">Restart</button><button class="btn" id="settingsBtn">Settings</button><button class="btn" id="mainMenuBtn">Main Menu</button></div></div></div>
+<div id="entry"><div class="entry-card"><h1>NPnop / Third-Person Controller Web Sandbox</h1><p>Three.js WebGL 2 port inspired by the original Godot controller. It is intentionally asset-free at runtime: procedural scene, audio, placeholder character, camera and multi-input are all contained in this page.</p><div class="actions"><button class="btn primary" id="enterBtn">Vstoupit</button><button class="btn" id="demoBtn">Demo mode</button></div></div></div>
+<div id="touch"><div id="leftZone" class="touch-zone"></div><div id="lookPad"></div><div id="moveStick" class="joystick"><div class="knob"></div></div><button id="jumpBtn" class="touch-btn">JUMP</button><button id="kickBtn" class="touch-btn small">KICK</button><button id="runBtn" class="touch-btn small">RUN</button><button id="downBtn" class="touch-btn tiny">DOWN</button></div>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+const FALLBACK = [
+  {base:'https://unpkg.com/three@0.160.0/', addon:'https://unpkg.com/three@0.160.0/examples/jsm/'},
+  {base:'https://cdn.jsdelivr.net/npm/three@0.160.0/', addon:'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/'}
+];
+let THREE, Sky, RoomEnvironment, EffectComposer, RenderPass, UnrealBloomPass, GLTFLoader;
+
+const CFG = {
+  walking:3.0, running:5.0, jump:4.5, gravity:9.8, visualsRot:10.0, walkSpeedThreshold:.15, runSpeedThreshold:3.5,
+  playerRadius:.30, playerHeight:1.80, camMountY:1.377, camDist:4.5,
+  mouseSens:.0022, touchLookSens:.0014, gamepadYaw:2.4, gamepadPitch:2.0, shakeIntensity:1.0, volume:.7,
+  fogDensity:.0045, sunElevationDeg:42, radarScale:4.5, radarRange:25
+};
+const state = {
+  inputMode:'keyboard', active:true, paused:false, demo:false, onFloor:true, velocity:null, visualYaw:0,
+  cam:{yaw:0,pitch:-0.14,trauma:0}, haptics:null, audio:null, selectedCamera:'shoulder', anim:'idle', stepAccum:0, stepPhase:0, lastImpact:0,
+  touchMove:{x:0,y:0,mag:0,run:false}, touchLook:{x:0,y:0}, keyboard:{}, gamepad:null, mouseDX:0,mouseDY:0, wasOnFloor:true
+};
+const refs = {};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const damp=(a,b,k,dt)=>a+(b-a)*(1-Math.exp(-k*dt));
+const lerpAngle=(a,b,t)=>{let d=((b-a+Math.PI*3)%(Math.PI*2))-Math.PI;return a+d*t};
+const noise=t=>((Math.sin(t*12.9898)*43758.5453)%1)*2-1;
+
+function el(id){return document.getElementById(id)}
+function setText(id,v){const n=el(id);if(n)n.textContent=v}
+function inputActive(mode){state.inputMode=mode;setText('inputMode',mode);document.getElementById('touch').style.display=mode==='touch'?'block':'none'}
+
+async function loadThree(){
+  let errors=[];
+  for(const candidate of FALLBACK){
+    try{
+      THREE=await import(candidate.base+'build/three.module.js');
+      ({Sky}=await import(candidate.addon+'objects/Sky.js'));
+      ({RoomEnvironment}=await import(candidate.addon+'environments/RoomEnvironment.js'));
+      ({EffectComposer}=await import(candidate.addon+'postprocessing/EffectComposer.js'));
+      ({RenderPass}=await import(candidate.addon+'postprocessing/RenderPass.js'));
+      ({UnrealBloomPass}=await import(candidate.addon+'postprocessing/UnrealBloomPass.js'));
+      ({GLTFLoader}=await import(candidate.addon+'loaders/GLTFLoader.js'));
+      return;
+    }catch(err){errors.push(err)}
+  }
+  const msg=errors.map(e=>e?.message||String(e)).join('\n');
+  throw new Error('Three.js CDN load failed.\n'+msg);
+}
+
+let scene,renderer,camera,composer,clock,worldGroup,player,visuals,camMount,raycaster,worldMeshes=[],obbBoxes=[];
+let radarSvg;
+function initRefs(){['inputMode','stateLabel','fps','debug','radar','panel','panelClose','menuBtn','gameMenu','resumeBtn','restartBtn','settingsBtn','mainMenuBtn','entry','enterBtn','demoBtn','touch','leftZone','lookPad','moveStick','jumpBtn','kickBtn','runBtn','downBtn','cameraPreset','exportGd'].forEach(id=>refs[id]=el(id));radarSvg=refs.radar}
+
+function makeGridTexture(){
+  const c=document.createElement('canvas');c.width=c.height=512;const ctx=c.getContext('2d');ctx.fillStyle='#1a2026';ctx.fillRect(0,0,512,512);for(let i=0;i<512;i+=32){ctx.strokeStyle=i%128===0?'rgba(255,255,255,.16)':'rgba(255,255,255,.045)';ctx.lineWidth=i%128===0?2:1;ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,512);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(512,i);ctx.stroke()}const tex=new THREE.CanvasTexture(c);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(16,16);tex.anisotropy=8;return tex;
+}
+function mat(color,rough=.75,metal=.05){return new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal})}
+function addObb(name,size,pos,yaw,color){
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(size.x,size.y,size.z),mat(color,.8,.04));mesh.name=name;mesh.position.copy(pos);mesh.rotation.y=yaw;mesh.castShadow=true;mesh.receiveShadow=true;worldGroup.add(mesh);worldMeshes.push(mesh);
+  obbBoxes.push({mesh,size:size.clone(),half:new THREE.Vector3(size.x/2,size.y/2,size.z/2),yaw,center:mesh.position.clone()});return mesh;
+}
+function buildScene(){
+  scene=new THREE.Scene();scene.background=new THREE.Color('#23313f');clock=new THREE.Clock();raycaster=new THREE.Raycaster();
+  const hemi=new THREE.HemisphereLight(0x9db8d6,0x182019,1.6);scene.add(hemi);
+  const sun=new THREE.DirectionalLight(0xffffff,2.4);sun.position.set(-35,50,-25);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-50;sun.shadow.camera.right=50;sun.shadow.camera.top=50;sun.shadow.camera.bottom=-50;scene.add(sun);
+  const sky=new Sky();sky.scale.setScalar(45000);sky.material.uniforms.turbidity.value=8;sky.material.uniforms.rayleigh.value=2.4;sky.material.uniforms.mieCoefficient.value=.006;sky.material.uniforms.mieDirectionalG.value=.78;sky.material.fog=false;scene.add(sky);updateSun(sky,sun);
+  scene.fog=new THREE.FogExp2(new THREE.Color('#71869b'),CFG.fogDensity);
+  worldGroup=new THREE.Group();scene.add(worldGroup);
+  const floorTex=makeGridTexture();const floor=new THREE.Mesh(new THREE.CircleGeometry(500,96),new THREE.MeshStandardMaterial({map:floorTex,roughness:.94,metalness:.05}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;worldGroup.add(floor);worldMeshes.push(floor);
+  addObb('box',new THREE.Vector3(1,1,1),new THREE.Vector3(3.916,.5,-3.755),.374,0xd97a2e);
+  addObb('box2',new THREE.Vector3(2,2,2),new THREE.Vector3(-1.725,1,3.928),1.002,0xb23636);
+  addObb('box3',new THREE.Vector3(3,3,3),new THREE.Vector3(-3.994,1.5,-6.464),.326,0x3f7a3f);
+  addObb('box4',new THREE.Vector3(6,1,6),new THREE.Vector3(7,.5,1),0,0x455566);
+  addObb('box5',new THREE.Vector3(4,1,4),new THREE.Vector3(-9,.5,0),0,0x555f69);addObb('box5b',new THREE.Vector3(4,1,4),new THREE.Vector3(-9,1.5,0),0,0x616d78);
+  addObb('ramp',new THREE.Vector3(8,.5,2),new THREE.Vector3(6,.25,-8),.7,0x7d7f84);
+  createPlayer();
+  camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.05,800);camera.position.set(0,2,5);scene.add(camera);
+  camMount.add(camera);camera.position.set(.358,.482,1.236);
+  renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.85;refs.app=el('app');refs.app.appendChild(renderer.domElement);renderer.domElement.style.touchAction='none';
+  try{renderer.getContext();}catch(e){throw new Error('WebGL 2 renderer unavailable.')} 
+  const envGen=new THREE.PMREMGenerator(renderer);const env=envGen.fromScene(new RoomEnvironment(renderer),0.04).texture;scene.environment=env;envGen.dispose();
+  composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.35,.5,.85));
+  renderer.domElement.addEventListener('click',()=>{if(!state.paused&&state.inputMode==='keyboard')renderer.domElement.requestPointerLock?.()});
+  window.addEventListener('resize',onResize);setupInput();setupInspector();setupMenus();
+  updateRadar();
+}
+function updateSun(sky,sun){const phi=THREE.MathUtils.degToRad(90-CFG.sunElevationDeg),theta=THREE.MathUtils.degToRad(25);const v=new THREE.Vector3().setFromSphericalCoords(1,phi,theta);sky.material.uniforms.sunPosition.value.copy(v);sun.position.copy(v).multiplyScalar(50);const t=clamp((CFG.sunElevationDeg-6)/79,0,1);scene.fog.color.setRGB(lerp(0x2a/255,0x8b/255,t),lerp(0x3a/255,0xa6/255,t),lerp(0x4a/255,0xc0/255,t))}
+function createPlayer(){
+  player=new THREE.Group();player.position.set(0,0,5);player.name='player';scene.add(player);
+  visuals=new THREE.Group();player.add(visuals);
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(CFG.playerRadius,CFG.playerHeight-2*CFG.playerRadius,8,16),mat(0xd54d43,.68,.05));body.position.y=CFG.playerHeight/2;body.castShadow=true;visuals.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.36,20,16),mat(0xf0c9a0,.72,.02));head.position.y=1.88;head.castShadow=true;visuals.add(head);
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(.11,.11,.22),mat(0x55201a,.72,.02));nose.position.set(0,1.9,-.36);visuals.add(nose);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.34,.42,32),new THREE.MeshBasicMaterial({color:0xff9a45,transparent:true,opacity:.7,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.015;player.add(ring);
+  camMount=new THREE.Group();camMount.position.y=CFG.camMountY;player.add(camMount);
+}
+function onResize(){if(!camera||!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer?.setSize(innerWidth,innerHeight);}
+
+function setupMenus(){
+  refs.menuBtn.onclick=()=>toggleGameMenu(true);refs.panelClose.onclick=()=>refs.panel.style.display='none';refs.resumeBtn.onclick=()=>toggleGameMenu(false);refs.restartBtn.onclick=()=>{resetPlayer();toggleGameMenu(false)};refs.settingsBtn.onclick=()=>{refs.gameMenu.style.display='none';refs.panel.style.display='block'};refs.mainMenuBtn.onclick=()=>{refs.gameMenu.style.display='none';refs.entry.style.display='flex';state.paused=true};refs.enterBtn.onclick=()=>beginGame(false);refs.demoBtn.onclick=()=>beginGame(true);
+}
+function toggleGameMenu(show){state.paused=show;refs.gameMenu.style.display=show?'flex':'none';if(show&&document.pointerLockElement===renderer?.domElement)document.exitPointerLock?.()}
+function beginGame(demo){state.paused=false;state.active=true;state.demo=demo;refs.entry.style.display='none';resumeAudio();if(!demo)renderer.domElement.requestPointerLock?.()}
+
+function setupInspector(){
+  const pairs=[['walk','walking'],['run','running'],['jump','jump'],['grav','gravity'],['shake','shakeIntensity'],['vol','volume']];for(const [id,key] of pairs){const s=el('s_'+id),o=el('o_'+id);s.value=CFG[key];const render=()=>{CFG[key]=+s.value;o.textContent=(key==='volume'?CFG[key].toFixed(2):CFG[key].toFixed(2))};s.addEventListener('input',render);render()}
+  refs.cameraPreset.addEventListener('change',e=>state.selectedCamera=e.target.value);refs.exportGd.onclick=exportGd;
+}
+function exportGd(){const gd=`# Auto-generated from NPnop Web Inspector\n# Timestamp: ${new Date().toISOString()}\nextends CharacterBody3D\n\n@export var walking_speed := ${CFG.walking}\n@export var running_speed := ${CFG.running}\n@export var JUMP_VELOCITY := ${CFG.jump}\n@export var VISUALS_ROTATION_SMOOTHNESS := ${CFG.visualsRot}\n@export var gravity := ${CFG.gravity}\n@export var CAMERA_CLAMP_MIN := deg_to_rad(-90)\n@export var CAMERA_CLAMP_MAX := deg_to_rad(45)\n@export var cameraShakeIntensity := ${CFG.shakeIntensity}\n@export var audioVolume := ${CFG.volume}\n@export var fog_density := ${CFG.fogDensity}\n@export var sunElevationDeg := ${CFG.sunElevationDeg}\n`;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([gd],{type:'text/plain'}));a.download='npnop_player.gd';a.click();URL.revokeObjectURL(a.href)}
+
+function setupInput(){
+  addEventListener('keydown',e=>{state.keyboard[e.code]=true;inputActive('keyboard');if(e.code==='Space')jump();if(e.code==='KeyF')kick();if(e.code==='KeyK')knockDown();if(e.code==='KeyG')getUp();if(e.code==='KeyR')resetPlayer();if(e.code==='Escape'&&state.paused)toggleGameMenu(false);});
+  addEventListener('keyup',e=>state.keyboard[e.code]=false);
+  addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement){state.mouseDX+=e.movementX;state.mouseDY+=e.movementY;inputActive('keyboard')}});
+  addEventListener('pointerdown',()=>resumeAudio(),{passive:true});
+  setupTouch();
+  addEventListener('gamepadconnected',e=>{state.gamepad=e.gamepad;inputActive('gamepad')});addEventListener('gamepaddisconnected',()=>{state.gamepad=null});
+}
+function setupTouch(){
+  const move=refs.moveStick, left=refs.leftZone;let pointerId=null,ox=0,oy=0;
+  left.addEventListener('pointerdown',e=>{if(e.clientX>innerWidth*.48)return;inputActive('touch');pointerId=e.pointerId;ox=e.clientX;oy=e.clientY;move.style.display='block';move.style.left=clamp(ox-55,10,innerWidth-120)+'px';move.style.top=clamp(oy-55,10,innerHeight-120)+'px';move.setPointerCapture(pointerId);updateMove(e)});
+  left.addEventListener('pointermove',e=>{if(e.pointerId===pointerId)updateMove(e)});left.addEventListener('pointerup',endMove);left.addEventListener('pointercancel',endMove);function updateMove(e){const dx=e.clientX-ox,dy=e.clientY-oy,r=55,m=Math.min(1,Math.hypot(dx,dy)/r),ang=Math.atan2(dy,dx);state.touchMove.x=Math.cos(ang)*m;state.touchMove.y=Math.sin(ang)*m;state.touchMove.mag=m;state.touchMove.run=m>.78}function endMove(){pointerId=null;state.touchMove.x=state.touchMove.y=state.touchMove.mag=0;state.touchMove.run=false;move.style.display='none'}
+  let lastX=0,lastY=0,lookId=null;refs.lookPad.addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.48)return;inputActive('touch');lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;refs.lookPad.setPointerCapture(lookId)});refs.lookPad.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;state.mouseDX+=(e.clientX-lastX)*.8;state.mouseDY+=(e.clientY-lastY)*.8;lastX=e.clientX;lastY=e.clientY});refs.lookPad.addEventListener('pointerup',()=>lookId=null);refs.lookPad.addEventListener('pointercancel',()=>lookId=null);
+  refs.jumpBtn.onclick=jump;refs.kickBtn.onclick=kick;refs.runBtn.onclick=()=>{state.touchMove.run=!state.touchMove.run};refs.downBtn.onclick=knockDown;
+}
+function readInput(){
+  let ix=0,iz=0,mag=0,run=false,jumpNow=false;
+  if(state.inputMode==='touch'){
+    ix=state.touchMove.x;iz=state.touchMove.y;mag=state.touchMove.mag;run=state.touchMove.run;
+  }else{
+    ix=(state.keyboard.KeyD||state.keyboard.ArrowRight?1:0)-(state.keyboard.KeyA||state.keyboard.ArrowLeft?1:0);iz=(state.keyboard.KeyS||state.keyboard.ArrowDown?1:0)-(state.keyboard.KeyW||state.keyboard.ArrowUp?1:0);mag=Math.min(1,Math.hypot(ix,iz));if(mag>0){ix/=mag;iz/=mag}run=!!state.keyboard.ShiftLeft||!!state.keyboard.ShiftRight;
+  }
+  const gp=navigator.getGamepads?.().find(g=>g?.connected);if(gp&&!state.paused){state.gamepad=gp;const ax=gp.axes?.[0]||0,ay=gp.axes?.[1]||0;const gm=Math.min(1,Math.hypot(ax,ay));if(gm>.15||gp.buttons?.some(b=>b?.pressed))inputActive('gamepad');if(state.inputMode==='gamepad'){ix=Math.abs(ax)<.12?0:ax;iz=Math.abs(ay)<.12?0:ay;mag=Math.min(1,Math.hypot(ix,iz));if(mag>1){ix/=mag;iz/=mag}run=!!(gp.buttons?.[7]?.pressed||gp.buttons?.[4]?.pressed||gp.buttons?.[5]?.pressed||gp.buttons?.[10]?.pressed);if(gp.buttons?.[0]?.pressed)jumpNow=true;}}
+  return {ix,iz,mag,run,jumpNow};
+}
+function applyCameraInput(dt){
+  if(state.paused)return;let dx=state.mouseDX,dy=state.mouseDY;state.mouseDX=state.mouseDY=0;
+  if(state.inputMode==='gamepad'&&state.gamepad){const gp=state.gamepad;const rx=Math.abs(gp.axes?.[2]||0)<.12?0:(gp.axes?.[2]||0),ry=Math.abs(gp.axes?.[3]||0)<.12?0:(gp.axes?.[3]||0);dx-=rx*2.4*dt/.0022;dy-=ry*2.0*dt/.0022}
+  state.cam.yaw-=dx*CFG.mouseSens;state.cam.pitch-=dy*CFG.mouseSens;state.cam.pitch=clamp(state.cam.pitch,-Math.PI/2,Math.PI/4);
+}
+
+function jump(){if(state.paused||!state.onFloor)return;state.velocity.y=CFG.jump;state.onFloor=false;state.anim='air';playJump()}
+function kick(){state.anim='kick';setTimeout(()=>{if(state.anim==='kick')state.anim='idle'},600);playTone(220,.08,.16)}
+function knockDown(){state.anim='knock_down';state.velocity.set(0,-1.5,0);setTimeout(()=>{if(state.anim==='knock_down')getUp()},900)}
+function getUp(){state.anim='get_up';state.velocity.y=0;setTimeout(()=>{state.anim='idle'},800)}
+function resetPlayer(){player.position.set(0,0,5);state.velocity.set(0,0,0);state.onFloor=true;state.cam.yaw=0;state.cam.pitch=-.14;state.visualYaw=0;state.anim='idle';visuals.rotation.set(0,0,0)}
+
+function worldDir(ix,iz){const yaw=state.cam.yaw;const fx=Math.sin(yaw+Math.PI),fz=Math.cos(yaw+Math.PI),rx=-fz,rz=fx;return new THREE.Vector3(ix*rx-iz*fx,0,ix*rz-iz*fz)}
+function rotateXZ(v,yaw){const c=Math.cos(yaw),s=Math.sin(yaw);return new THREE.Vector3(v.x*c-v.z*s,v.y,v.x*s+v.z*c)}
+function inverseRotateXZ(v,yaw){return rotateXZ(v,-yaw)}
+function capsuleVsOBB(pos,R,H,box){
+  const rel=new THREE.Vector3(pos.x-box.center.x,pos.y-box.center.y,pos.z-box.center.z);const p=inverseRotateXZ(rel,box.yaw);const closestX=clamp(p.x,-box.half.x,box.half.x),closestZ=clamp(p.z,-box.half.z,box.half.z);let dx=p.x-closestX,dz=p.z-closestZ;let hDist=Math.hypot(dx,dz);const bottom=pos.y,top=pos.y+H,boxBottom=-box.half.y+box.center.y,boxTop=box.half.y+box.center.y;const vOverlap=Math.min(top,boxTop)-Math.max(bottom,boxBottom);if(vOverlap<=0)return null;
+  if(hDist<R){let nx=0,nz=0;if(hDist>.0001){nx=dx/hDist;nz=dz/hDist}else{const px=box.half.x-Math.abs(p.x),pz=box.half.z-Math.abs(p.z);if(px<pz)nx=p.x>=0?1:-1;else nz=p.z>=0?1:-1;hDist=0}const hPen=R-hDist,vPen=vOverlap;if(hPen<vPen){const n=rotateXZ(new THREE.Vector3(nx,0,nz),box.yaw).normalize();return {normal:n,depth:hPen,type:'side',box}}}
+  if(hDist<=R){if(bottom<boxTop&&top>boxTop){const pen=boxTop-bottom;if(pen>=0&&pen<=vOverlap+R*2)return {normal:new THREE.Vector3(0,1,0),depth:pen,type:'top',box}}if(top>boxBottom&&bottom<boxBottom){const pen=top-boxBottom;if(pen>=0&&pen<=vOverlap+R*2)return {normal:new THREE.Vector3(0,-1,0),depth:pen,type:'bottom',box}}}
+  return null;
+}
+function resolveCollisions(){
+  state.onFloor=false;let iterations=0;while(iterations++<4){let hit=null;for(const box of obbBoxes){const c=capsuleVsOBB(player.position,CFG.playerRadius,CFG.playerHeight,box);if(c&&(!hit||c.depth>hit.depth))hit=c}if(!hit)break;player.position.addScaledVector(hit.normal,hit.depth+.002);if(hit.type==='top'){state.onFloor=true;state.velocity.y=0;if(!state.wasOnFloor)landing(Math.abs(state.velocity.y))}else if(hit.type==='bottom'){state.velocity.y=0}else{const vn=state.velocity.dot(hit.normal);if(vn<0)state.velocity.addScaledVector(hit.normal,-vn);if(Math.abs(vn)>1.35&&performance.now()-state.lastImpact>240){state.cam.trauma=Math.max(state.cam.trauma,clamp((Math.abs(vn)-1)/6,0,.85)*CFG.shakeIntensity);state.lastImpact=performance.now()}}}
+  if(player.position.y<=0){if(!state.onFloor&&state.velocity.y<0){}if(!state.onFloor&&state.wasOnFloor===false&&state.velocity.y<0){}state.onFloor=true;if(player.position.y<0)player.position.y=0;if(state.velocity.y<0){const fall=Math.abs(state.velocity.y);state.velocity.y=0;if(!state.wasOnFloor)landing(fall)}}
+}
+function landing(speed){state.cam.trauma=Math.max(state.cam.trauma,clamp((speed-1)/8.5,0,1)*CFG.shakeIntensity);playLand(speed)}
+function updatePlayer(dt){
+  if(state.paused)return;const inp=readInput();if(inp.jumpNow)jump();const speed=(inp.run?CFG.running:CFG.walking)*inp.mag;const dir=worldDir(inp.ix,inp.iz);if(inp.mag>0.01){state.velocity.x=dir.x*speed;state.velocity.z=dir.z*speed}else{state.velocity.x=damp(state.velocity.x,0,12,dt);state.velocity.z=damp(state.velocity.z,0,12,dt)}
+  if(!state.onFloor)state.velocity.y-=CFG.gravity*dt;else if(state.velocity.y<0)state.velocity.y=0;player.position.x+=state.velocity.x*dt;player.position.y+=state.velocity.y*dt;player.position.z+=state.velocity.z*dt;resolveCollisions();const h=Math.hypot(state.velocity.x,state.velocity.z);if(!state.onFloor)state.anim=state.anim==='kick'||state.anim==='knock_down'||state.anim==='get_up'?state.anim:'air';else if(h>CFG.runSpeedThreshold)state.anim='run';else if(h>CFG.walkSpeedThreshold)state.anim='walk';else if(!['kick','knock_down','get_up'].includes(state.anim))state.anim='idle';
+  const visualWorldYaw=h>.03?Math.atan2(state.velocity.x,state.velocity.z):state.cam.yaw;const targetRel=visualWorldYaw-state.cam.yaw;state.visualYaw=lerpAngle(state.visualYaw,targetRel,1-Math.exp(-CFG.visualsRot*dt));player.rotation.y=state.cam.yaw;visuals.rotation.y=state.visualYaw;animateVisuals(dt,h);
+  updateFootAudio(dt,h,inp.run);state.wasOnFloor=state.onFloor;
+}
+function animateVisuals(dt,h){const t=clock.elapsedTime;let bob=0,sway=0; if(state.anim==='walk'||state.anim==='run'){const amp=state.anim==='run'?.075:.045;const freq=state.anim==='run'?10:7;bob=Math.sin(t*freq)*amp;sway=Math.cos(t*freq)*amp*.5}visuals.position.y=damp(visuals.position.y,bob*0.6,15,dt);visuals.rotation.z=damp(visuals.rotation.z,sway,10,dt);if(state.anim==='kick'){visuals.rotation.x=damp(visuals.rotation.x,-.32,10,dt)}else if(state.anim==='knock_down'){visuals.rotation.x=damp(visuals.rotation.x,-1.15,8,dt)}else if(state.anim==='get_up'){visuals.rotation.x=damp(visuals.rotation.x,0,5,dt)}else visuals.rotation.x=damp(visuals.rotation.x,0,12,dt)}
+
+function getCameraPreset(){return {shoulder:{pos:[.358,.482,1.236],mount:1.377},close:{pos:[.46,.24,.95],mount:1.44},wide:{pos:[0,.65,2.35],mount:1.5},tactical:{pos:[0,2.1,3.3],mount:1.75}}[state.selectedCamera]||{pos:[.358,.482,1.236],mount:1.377}}
+function updateCamera(dt){applyCameraInput(dt);const p=getCameraPreset();camMount.position.y=damp(camMount.position.y,p.mount,7,dt);camera.position.set(...p.pos);camera.rotation.order='YXZ';camera.rotation.y=0;camera.rotation.x=0;camMount.rotation.x=state.cam.pitch;camMount.rotation.y=state.cam.yaw;
+  const mountWorld=camMount.getWorldPosition(new THREE.Vector3());const desired=camera.getWorldPosition(new THREE.Vector3());const dir=desired.clone().sub(mountWorld);const len=dir.length();dir.normalize();raycaster.set(mountWorld,dir);raycaster.far=len;const hits=raycaster.intersectObjects(worldMeshes.filter(m=>m!==player),false);const dist=hits.length?Math.max(.6,hits[0].distance-.2):len;const final=mountWorld.clone().addScaledVector(dir,dist);camera.position.copy(camMount.worldToLocal(final));
+  state.cam.trauma=Math.max(0,state.cam.trauma-1.4*dt);const shake=state.cam.trauma*state.cam.trauma;const n=clock.elapsedTime*25;camera.position.x+=noise(n+100)*.05*shake;camera.position.y+=noise(n+150)*.06*shake;camera.position.z+=noise(n+200)*.05*shake;camera.rotation.z+=noise(n+250)*.03*shake;const h=Math.hypot(state.velocity.x,state.velocity.z);const targetFov=(state.anim==='run'&&h>CFG.runSpeedThreshold)?78:70;camera.fov=damp(camera.fov,targetFov,5,dt);camera.updateProjectionMatrix();
+}
+
+function updateRadar(){if(!player||!radarSvg)return;let s='<circle cx="90" cy="90" r="30" fill="none" stroke="rgba(255,255,255,.10)"/><circle cx="90" cy="90" r="60" fill="none" stroke="rgba(255,255,255,.08)"/><circle cx="90" cy="90" r="85" fill="none" stroke="rgba(255,255,255,.06)"/>';const yaw=state.cam.yaw;for(const box of obbBoxes){const dx=box.center.x-player.position.x,dz=box.center.z-player.position.z;const rx=dx*Math.cos(-yaw)-dz*Math.sin(-yaw),rz=dx*Math.sin(-yaw)+dz*Math.cos(-yaw);const sx=90+rx*CFG.radarScale,sy=90-rz*CFG.radarScale;if(sx<-20||sx>200||sy<-20||sy>200)continue;const w=clamp(box.size.x*CFG.radarScale/1.2,4,32),h=clamp(box.size.z*CFG.radarScale/1.2,4,32);s+=`<rect x="${sx-w/2}" y="${sy-h/2}" width="${w}" height="${h}" transform="rotate(${(box.yaw-yaw)*180/Math.PI} ${sx} ${sy})" fill="rgba(255,255,255,.10)"/>`}
+  const dirYaw=state.cam.yaw+state.visualYaw;const px=90,py=90,ax=Math.sin(dirYaw)*10,az=Math.cos(dirYaw)*10;s+=`<circle cx="90" cy="90" r="3" fill="#ff9a45"/><path d="M ${px} ${py} L ${px+ax} ${py-az}" stroke="#ff9a45" stroke-width="2"/>`;s+='<path d="M90 90 L 68 55 A40 40 0 0 1 112 55 Z" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.08)"/>';radarSvg.innerHTML=s}
+
+let audioCtx=null;function resumeAudio(){try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();audioCtx.resume()}catch{} }
+function playTone(freq,duration,gain){if(!audioCtx||CFG.volume<=0)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(freq,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*.65),audioCtx.currentTime+duration);g.gain.setValueAtTime(gain*CFG.volume,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+duration);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+duration+.02)}
+function playStep(running,pan){if(!audioCtx||CFG.volume<=0)return;const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*.14,audioCtx.sampleRate),d=buffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/d.length*8);const src=audioCtx.createBufferSource();src.buffer=buffer;const f=audioCtx.createBiquadFilter();f.type='lowpass';f.frequency.value=running?1400:700;f.Q.value=.8;const g=audioCtx.createGain();g.gain.setValueAtTime((running?.35:.22)*CFG.volume,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.14);const p=audioCtx.createStereoPanner?.();if(p){p.pan.value=pan;g.connect(p).connect(audioCtx.destination)}else g.connect(audioCtx.destination);src.connect(f).connect(g);src.start()}
+function playJump(){playTone(180,.12,.22)}function playLand(speed){const v=clamp(speed/6,0,1);playTone(90+v*30,.15+v*.15,.3*v)}
+function updateFootAudio(dt,h,run){if(!state.onFloor||h<=CFG.walkSpeedThreshold)return;const rate=run?2.6:1.6;state.stepAccum+=dt*rate;while(state.stepAccum>=1){state.stepAccum-=1;playStep(run,state.stepPhase%2?-0.14:.14);state.stepPhase++}}
+
+let fpsT=0,fpsC=0;function updateHud(dt){fpsT+=dt;fpsC++;if(fpsT>.5){setText('fps','FPS '+Math.round(fpsC/fpsT));fpsT=0;fpsC=0}setText('stateLabel',state.anim);setText('debug',`pos ${player.position.x.toFixed(2)}, ${player.position.y.toFixed(2)}, ${player.position.z.toFixed(2)}  |  speed ${Math.hypot(state.velocity.x,state.velocity.z).toFixed(2)} m/s  |  ${state.demo?'DEMO':'LIVE'}`)}
+
+function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05);if(!state.paused&&state.active){updatePlayer(dt);updateCamera(dt);updateRadar();updateHud(dt)}composer.render()}
+
+(async()=>{
+  initRefs();try{await loadThree();state.velocity=new THREE.Vector3();buildScene();loop();}catch(err){refs.entry.innerHTML=`<div class="entry-card"><h1>Engine failed to start</h1><p>${String(err.message||err).replaceAll('<','&lt;')}</p><p>Check WebGL 2 and network access to the Three.js CDN.</p></div>`;console.error(err)}})();
+</script>
+</body>
+</html>
