@@ -188,7 +188,7 @@ function setupTouch(){
   left.addEventListener('pointerdown',e=>{if(e.clientX>innerWidth*.48)return;inputActive('touch');pointerId=e.pointerId;ox=e.clientX;oy=e.clientY;move.style.display='block';move.style.left=clamp(ox-55,10,innerWidth-120)+'px';move.style.top=clamp(oy-55,10,innerHeight-120)+'px';move.setPointerCapture(pointerId);updateMove(e)});
   left.addEventListener('pointermove',e=>{if(e.pointerId===pointerId)updateMove(e)});left.addEventListener('pointerup',endMove);left.addEventListener('pointercancel',endMove);function updateMove(e){const dx=e.clientX-ox,dy=e.clientY-oy,r=55,m=Math.min(1,Math.hypot(dx,dy)/r),ang=Math.atan2(dy,dx);state.touchMove.x=Math.cos(ang)*m;state.touchMove.y=Math.sin(ang)*m;state.touchMove.mag=m;state.touchMove.run=m>.78}function endMove(){pointerId=null;state.touchMove.x=state.touchMove.y=state.touchMove.mag=0;state.touchMove.run=false;move.style.display='none'}
   let lastX=0,lastY=0,lookId=null;refs.lookPad.addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.48)return;inputActive('touch');lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;refs.lookPad.setPointerCapture(lookId)});refs.lookPad.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;state.mouseDX+=(e.clientX-lastX)*.8;state.mouseDY+=(e.clientY-lastY)*.8;lastX=e.clientX;lastY=e.clientY});refs.lookPad.addEventListener('pointerup',()=>lookId=null);refs.lookPad.addEventListener('pointercancel',()=>lookId=null);
-  refs.jumpBtn.onclick=jump;refs.kickBtn.onclick=kick;refs.runBtn.onclick=()=>{state.touchMove.run=!state.touchMove.run};refs.downBtn.onclick=knockDown;
+  refs.jumpBtn.onclick=jump;refs.kickBtn.onclick=kick;refs.runBtn.onclick=()=>{state.touchSprintToggle=!state.touchSprintToggle;refs.runBtn.style.background=state.touchSprintToggle?'rgba(255,154,69,.22)':''};refs.downBtn.onclick=knockDown;
 }
 function readInput(){
   let ix=0,iz=0,mag=0,run=false,jumpNow=false;
@@ -202,15 +202,17 @@ function readInput(){
 }
 function applyCameraInput(dt){
   if(state.paused)return;let dx=state.mouseDX,dy=state.mouseDY;state.mouseDX=state.mouseDY=0;
-  if(state.inputMode==='gamepad'&&state.gamepad){const gp=state.gamepad;const rx=Math.abs(gp.axes?.[2]||0)<.12?0:(gp.axes?.[2]||0),ry=Math.abs(gp.axes?.[3]||0)<.12?0:(gp.axes?.[3]||0);dx-=rx*2.4*dt/.0022;dy-=ry*2.0*dt/.0022}
-  state.cam.yaw-=dx*CFG.mouseSens;state.cam.pitch-=dy*CFG.mouseSens;state.cam.pitch=clamp(state.cam.pitch,-Math.PI/2,Math.PI/4);
+  let sens=CFG.mouseSens;
+  if(state.inputMode==='touch')sens=CFG.touchLookSens;
+  if(state.inputMode==='gamepad'&&state.gamepad){const gp=state.gamepad;const rx=Math.abs(gp.axes?.[2]||0)<.12?0:(gp.axes?.[2]||0),ry=Math.abs(gp.axes?.[3]||0)<.12?0:(gp.axes?.[3]||0);dx-=rx*2.4*dt/sens;dy-=ry*2.0*dt/sens}
+  state.cam.yaw-=dx*sens;state.cam.pitch-=dy*sens;state.cam.pitch=clamp(state.cam.pitch,-Math.PI/2,Math.PI/4);
 }
 
 function jump(){if(state.paused||!state.onFloor)return;state.velocity.y=CFG.jump;state.onFloor=false;state.anim='air';playJump()}
 function kick(){state.anim='kick';setTimeout(()=>{if(state.anim==='kick')state.anim='idle'},600);playTone(220,.08,.16)}
 function knockDown(){state.anim='knock_down';state.velocity.set(0,-1.5,0);setTimeout(()=>{if(state.anim==='knock_down')getUp()},900)}
 function getUp(){state.anim='get_up';state.velocity.y=0;setTimeout(()=>{state.anim='idle'},800)}
-function resetPlayer(){player.position.set(0,0,5);state.velocity.set(0,0,0);state.onFloor=true;state.cam.yaw=0;state.cam.pitch=-.14;state.visualYaw=0;state.anim='idle';visuals.rotation.set(0,0,0)}
+function resetPlayer(){player.position.set(0,0,5);state.velocity.set(0,0,0);state.onFloor=true;state.wasOnFloor=true;state.touchSprintToggle=false;state.cam.yaw=0;state.cam.pitch=-.14;state.visualYaw=0;state.anim='idle';visuals.rotation.set(0,0,0);if(refs.runBtn)refs.runBtn.style.background=''}
 
 function worldDir(ix,iz){const yaw=state.cam.yaw;const fx=Math.sin(yaw+Math.PI),fz=Math.cos(yaw+Math.PI),rx=-fz,rz=fx;return new THREE.Vector3(ix*rx-iz*fx,0,ix*rz-iz*fz)}
 function rotateXZ(v,yaw){const c=Math.cos(yaw),s=Math.sin(yaw);return new THREE.Vector3(v.x*c-v.z*s,v.y,v.x*s+v.z*c)}
@@ -222,8 +224,8 @@ function capsuleVsOBB(pos,R,H,box){
   return null;
 }
 function resolveCollisions(){
-  state.onFloor=false;let iterations=0;while(iterations++<4){let hit=null;for(const box of obbBoxes){const c=capsuleVsOBB(player.position,CFG.playerRadius,CFG.playerHeight,box);if(c&&(!hit||c.depth>hit.depth))hit=c}if(!hit)break;player.position.addScaledVector(hit.normal,hit.depth+.002);if(hit.type==='top'){state.onFloor=true;state.velocity.y=0;if(!state.wasOnFloor)landing(Math.abs(state.velocity.y))}else if(hit.type==='bottom'){state.velocity.y=0}else{const vn=state.velocity.dot(hit.normal);if(vn<0)state.velocity.addScaledVector(hit.normal,-vn);if(Math.abs(vn)>1.35&&performance.now()-state.lastImpact>240){const t=clamp((Math.abs(vn)-1)/6,0,.85)*CFG.shakeIntensity;state.cam.trauma=Math.max(state.cam.trauma,t);rumble(t);state.lastImpact=performance.now()}}}
-  if(player.position.y<=0){if(!state.onFloor&&state.velocity.y<0){}if(!state.onFloor&&state.wasOnFloor===false&&state.velocity.y<0){}state.onFloor=true;if(player.position.y<0)player.position.y=0;if(state.velocity.y<0){const fall=Math.abs(state.velocity.y);state.velocity.y=0;if(!state.wasOnFloor)landing(fall)}}
+  state.onFloor=false;let iterations=0;while(iterations++<4){let hit=null;for(const box of obbBoxes){const c=capsuleVsOBB(player.position,CFG.playerRadius,CFG.playerHeight,box);if(c&&(!hit||c.depth>hit.depth))hit=c}if(!hit)break;player.position.addScaledVector(hit.normal,hit.depth+.002);if(hit.type==='top'){const impactSpeed=Math.abs(state.velocity.y);state.onFloor=true;state.velocity.y=0;if(!state.wasOnFloor)landing(impactSpeed)}else if(hit.type==='bottom'){state.velocity.y=0}else{const vn=state.velocity.dot(hit.normal);if(vn<0)state.velocity.addScaledVector(hit.normal,-vn);if(Math.abs(vn)>1.35&&performance.now()-state.lastImpact>240){const t=clamp((Math.abs(vn)-1)/6,0,.85)*CFG.shakeIntensity;state.cam.trauma=Math.max(state.cam.trauma,t);rumble(t);state.lastImpact=performance.now()}}}
+  if(player.position.y<=0){const fallSpeed=Math.abs(state.velocity.y);const landingNow=state.velocity.y<0&&!state.wasOnFloor;player.position.y=0;state.onFloor=true;if(state.velocity.y<0)state.velocity.y=0;if(landingNow)landing(fallSpeed)}
 }
 function rumble(t){const gp=state.gamepad;if(!gp?.vibrationActuator?.playEffect)return;try{gp.vibrationActuator.playEffect('dual-rumble',{duration:180,strongMagnitude:clamp(t,0,1),weakMagnitude:clamp(t*.6,0,1)})}catch{}}function landing(speed){const t=clamp((speed-1)/8.5,0,1)*CFG.shakeIntensity;state.cam.trauma=Math.max(state.cam.trauma,t);playLand(speed);rumble(t)}
 function updatePlayer(dt){
@@ -235,7 +237,7 @@ function updatePlayer(dt){
 function animateVisuals(dt,h){const t=clock.elapsedTime;let bob=0,sway=0; if(state.anim==='walk'||state.anim==='run'){const amp=state.anim==='run'?.075:.045;const freq=state.anim==='run'?10:7;bob=Math.sin(t*freq)*amp;sway=Math.cos(t*freq)*amp*.5}visuals.position.y=damp(visuals.position.y,bob*0.6,15,dt);visuals.rotation.z=damp(visuals.rotation.z,sway,10,dt);if(state.anim==='kick'){visuals.rotation.x=damp(visuals.rotation.x,-.32,10,dt)}else if(state.anim==='knock_down'){visuals.rotation.x=damp(visuals.rotation.x,-1.15,8,dt)}else if(state.anim==='get_up'){visuals.rotation.x=damp(visuals.rotation.x,0,5,dt)}else visuals.rotation.x=damp(visuals.rotation.x,0,12,dt)}
 
 function getCameraPreset(){return {shoulder:{pos:[.358,.482,1.236],mount:1.377},close:{pos:[.46,.24,.95],mount:1.44},wide:{pos:[0,.65,2.35],mount:1.5},tactical:{pos:[0,2.1,3.3],mount:1.75}}[state.selectedCamera]||{pos:[.358,.482,1.236],mount:1.377}}
-function updateCamera(dt){applyCameraInput(dt);const p=getCameraPreset();camMount.position.y=damp(camMount.position.y,p.mount,7,dt);camera.position.set(...p.pos);camera.rotation.order='YXZ';camera.rotation.y=0;camera.rotation.x=0;camMount.rotation.x=state.cam.pitch;camMount.rotation.y=state.cam.yaw;
+function updateCamera(dt){applyCameraInput(dt);const p=getCameraPreset();camMount.position.y=damp(camMount.position.y,p.mount,7,dt);camera.position.set(...p.pos);camera.rotation.order='YXZ';camera.rotation.y=0;camera.rotation.x=0;camMount.rotation.x=state.cam.pitch;camMount.rotation.y=0;
   const mountWorld=camMount.getWorldPosition(new THREE.Vector3());const desired=camera.getWorldPosition(new THREE.Vector3());const dir=desired.clone().sub(mountWorld);const len=dir.length();dir.normalize();raycaster.set(mountWorld,dir);raycaster.far=len;const hits=raycaster.intersectObjects(worldMeshes.filter(m=>m!==player),false);const dist=hits.length?Math.max(.6,hits[0].distance-.2):len;const final=mountWorld.clone().addScaledVector(dir,dist);camera.position.copy(camMount.worldToLocal(final));
   state.cam.trauma=Math.max(0,state.cam.trauma-1.4*dt);const shake=state.cam.trauma*state.cam.trauma;const n=clock.elapsedTime*25;camera.position.x+=noise(n+100)*.05*shake;camera.position.y+=noise(n+150)*.06*shake;camera.position.z+=noise(n+200)*.05*shake;camera.rotation.z+=noise(n+250)*.03*shake;const h=Math.hypot(state.velocity.x,state.velocity.z);const targetFov=(state.anim==='run'&&h>CFG.runSpeedThreshold)?78:70;camera.fov=damp(camera.fov,targetFov,5,dt);camera.updateProjectionMatrix();
 }
