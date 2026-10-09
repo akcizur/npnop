@@ -28,7 +28,7 @@ button,input{font:inherit}button{color:inherit}
 #menuBtn{position:fixed;right:16px;top:16px;z-index:20;pointer-events:auto;width:40px;height:40px;padding:0;border-radius:50%;background:rgba(5,8,11,.52);backdrop-filter:blur(8px)}
 #entry{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:30;background:radial-gradient(circle at 50% 35%,rgba(61,85,105,.28),rgba(5,8,11,.97) 58%);pointer-events:auto}
 .entry-card{width:min(560px,calc(100vw - 32px));padding:26px;border:1px solid var(--line);background:rgba(5,8,11,.74);backdrop-filter:blur(16px);border-radius:20px;box-shadow:0 20px 70px rgba(0,0,0,.45)}
-.entry-card h1{margin:0 0 8px;font-size:20px}.entry-card p{margin:0 0 18px;font-size:11px;line-height:1.65;color:var(--muted)}.entry-card .actions{display:flex;gap:8px;flex-wrap:wrap}.primary{border-color:rgba(255,154,69,.45);background:rgba(255,154,69,.12)}
+.entry-card h1{margin:0 0 8px;font-size:20px}.entry-card p{margin:0 0 18px;font-size:11px;line-height:1.65;color:var(--muted)}.entry-card .actions{display:flex;gap:8px;flex-wrap:wrap}.asset-status{margin:12px 0 0;font-size:10px;line-height:1.5;color:#b6c4b2;overflow-wrap:anywhere}.entry-card a{color:var(--muted);font-size:10px;align-self:center}.primary{border-color:rgba(255,154,69,.45);background:rgba(255,154,69,.12)}
 #gameMenu{position:fixed;inset:0;z-index:25;display:none;align-items:center;justify-content:center;background:rgba(5,8,11,.58);backdrop-filter:blur(10px);pointer-events:auto}
 .menu-card{width:min(360px,calc(100vw - 32px));padding:18px;border:1px solid var(--line);background:var(--panel);border-radius:18px}.menu-card h2{font-size:14px;margin:0 0 12px}.menu-list{display:grid;gap:8px}.menu-list .btn{text-align:left}
 #touch{position:fixed;inset:0;z-index:15;display:none;pointer-events:none}.touch-zone{position:absolute;inset:0;pointer-events:auto}.joystick{position:absolute;width:110px;height:110px;border:2px solid rgba(255,255,255,.18);border-radius:50%;background:rgba(0,0,0,.16);display:none}.joystick .knob{position:absolute;width:52px;height:52px;left:29px;top:29px;border-radius:50%;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22)}
@@ -61,8 +61,9 @@ button,input{font:inherit}button{color:inherit}
   <div class="row"><label>GDScript</label><button id="exportGd" class="btn">Export .gd</button></div>
   <div class="sep"></div><div class="hint">Desktop: click the scene for pointer lock. WASD / arrows move, Shift sprint, Space jump, F kick, K knock down, G get up, R reset, Esc releases pointer lock.</div>
 </div>
+<input id="warriorFile" type="file" accept=".glb,model/gltf-binary" hidden />
 <div id="gameMenu"><div class="menu-card"><h2>Game Menu</h2><div class="menu-list"><button class="btn" id="resumeBtn">Resume</button><button class="btn" id="restartBtn">Restart</button><button class="btn" id="settingsBtn">Settings</button><button class="btn" id="mainMenuBtn">Main Menu</button></div></div></div>
-<div id="entry"><div class="entry-card"><h1>NPnop / Third-Person Controller Web Sandbox</h1><p>Three.js WebGL 2 port inspired by the original Godot controller. It is intentionally asset-free at runtime: procedural scene, audio, placeholder character, camera and multi-input are all contained in this page.</p><div class="actions"><button class="btn primary" id="enterBtn">Vstoupit</button><button class="btn" id="demoBtn">Demo mode</button></div></div></div>
+<div id="entry"><div class="entry-card"><h1>NPnop / Third-Person Controller Web Sandbox</h1><p>Three.js third-person sandbox with a playable warrior controller. The game loads a rigged GLB from <code>assets/warrior.glb</code>, blends available animation clips, and keeps a procedural warrior fallback so the world still runs before the asset is added.</p><div class="actions"><button class="btn primary" id="enterBtn">Vstoupit</button><button class="btn" id="demoBtn">Demo mode</button><button class="btn" id="loadWarriorBtn">Load Warrior GLB</button><a href="https://studio.tripo3d.ai/3d-model/muscular-hooded-warrior-with-tattered-robes-exposed-chest-gray-headp-abe1ca18-d219-4a2e-a185-5eece29923ee" target="_blank" rel="noopener noreferrer">Open Tripo model ↗</a></div><p id="assetStatus" class="asset-status" role="status" aria-live="polite">Checking for assets/warrior.glb…</p></div></div>
 <div id="touch"><div id="leftZone" class="touch-zone"></div><div id="lookPad"></div><div id="moveStick" class="joystick"><div class="knob"></div></div><button id="jumpBtn" class="touch-btn">JUMP</button><button id="kickBtn" class="touch-btn small">KICK</button><button id="runBtn" class="touch-btn small">RUN</button><button id="downBtn" class="touch-btn tiny">DOWN</button></div>
 <script type="importmap">
 {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
@@ -115,8 +116,9 @@ async function loadThree(){
 }
 
 let scene,renderer,camera,composer,clock,worldGroup,player,visuals,camMount,raycaster,worldMeshes=[],obbBoxes=[];
+let fallbackVisuals=null,warriorModel=null,warriorLoaded=false,modelMixer=null,modelActions=new Map(),currentModelAction=null,proceduralBones=[];
 let radarSvg;
-function initRefs(){['inputMode','stateLabel','fps','debug','radar','panel','panelClose','menuBtn','gameMenu','resumeBtn','restartBtn','settingsBtn','mainMenuBtn','entry','enterBtn','demoBtn','touch','leftZone','lookPad','moveStick','jumpBtn','kickBtn','runBtn','downBtn','cameraPreset','exportGd'].forEach(id=>refs[id]=el(id));radarSvg=refs.radar}
+function initRefs(){['inputMode','stateLabel','fps','debug','radar','panel','panelClose','menuBtn','gameMenu','resumeBtn','restartBtn','settingsBtn','mainMenuBtn','entry','enterBtn','demoBtn','touch','leftZone','lookPad','moveStick','jumpBtn','kickBtn','runBtn','downBtn','cameraPreset','exportGd','loadWarriorBtn','warriorFile','assetStatus'].forEach(id=>refs[id]=el(id));radarSvg=refs.radar}
 
 function makeGridTexture(){
   const c=document.createElement('canvas');c.width=c.height=512;const ctx=c.getContext('2d');ctx.fillStyle='#1a2026';ctx.fillRect(0,0,512,512);for(let i=0;i<512;i+=32){ctx.strokeStyle=i%128===0?'rgba(255,255,255,.16)':'rgba(255,255,255,.045)';ctx.lineWidth=i%128===0?2:1;ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,512);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(512,i);ctx.stroke()}const tex=new THREE.CanvasTexture(c);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(16,16);tex.anisotropy=8;return tex;
@@ -149,22 +151,154 @@ function buildScene(){
   composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.35,.5,.85));
   renderer.domElement.addEventListener('click',()=>{if(!state.paused&&state.inputMode==='keyboard')renderer.domElement.requestPointerLock?.()});
   window.addEventListener('resize',onResize);setupInput();setupInspector();setupMenus();
+  loadWarriorModel();
   updateRadar();
 }
 function updateSun(sky,sun){const phi=THREE.MathUtils.degToRad(90-CFG.sunElevationDeg),theta=THREE.MathUtils.degToRad(25);const v=new THREE.Vector3().setFromSphericalCoords(1,phi,theta);sky.material.uniforms.sunPosition.value.copy(v);sun.position.copy(v).multiplyScalar(50);const t=clamp((CFG.sunElevationDeg-6)/79,0,1);scene.fog.color.setRGB(lerp(0x2a/255,0x8b/255,t),lerp(0x3a/255,0xa6/255,t),lerp(0x4a/255,0xc0/255,t))}
 function createPlayer(){
   player=new THREE.Group();player.position.set(0,0,5);player.name='player';scene.add(player);
   visuals=new THREE.Group();player.add(visuals);
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(CFG.playerRadius,CFG.playerHeight-2*CFG.playerRadius,8,16),mat(0xd54d43,.68,.05));body.position.y=CFG.playerHeight/2;body.castShadow=true;visuals.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.36,20,16),mat(0xf0c9a0,.72,.02));head.position.y=1.88;head.castShadow=true;visuals.add(head);
-  const nose=new THREE.Mesh(new THREE.BoxGeometry(.11,.11,.22),mat(0x55201a,.72,.02));nose.position.set(0,1.9,-.36);visuals.add(nose);
+  fallbackVisuals=new THREE.Group();fallbackVisuals.name='procedural-warrior-fallback';visuals.add(fallbackVisuals);
+  const skin=mat(0x887d68,.88,.01), skinLight=mat(0x9b8b73,.86,.01), cloth=mat(0x181a19,.97,.01), clothDark=mat(0x0d0f0f,.98,.0), wrap=mat(0x48483b,.96,.0), beard=mat(0xaaa99a,.93,.0), leather=mat(0x454036,.95,.0);
+  cloth.side=THREE.DoubleSide;clothDark.side=THREE.DoubleSide;
+  const robe=new THREE.Mesh(new THREE.CylinderGeometry(.24,.39,1.24,14,5,true),cloth);robe.position.set(0,.68,0);robe.castShadow=true;robe.receiveShadow=true;fallbackVisuals.add(robe);
+  const innerRobe=new THREE.Mesh(new THREE.CylinderGeometry(.20,.31,.83,12,2,true),clothDark);innerRobe.position.set(0,.46,.015);innerRobe.castShadow=true;fallbackVisuals.add(innerRobe);
+  const torso=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),skin);torso.scale.set(.235,.34,.155);torso.position.set(0,1.32,-.025);torso.castShadow=true;fallbackVisuals.add(torso);
+  for(let row=0;row<3;row++)for(let side=-1;side<=1;side+=2){const ab=new THREE.Mesh(new THREE.SphereGeometry(1,10,8),skinLight);ab.scale.set(.105,.075,.045);ab.position.set(side*.095,1.31-row*.105,-.148);ab.castShadow=true;fallbackVisuals.add(ab)}
+  for(const side of [-1,1]){
+    const shoulder=new THREE.Mesh(new THREE.SphereGeometry(1,12,10),cloth);shoulder.scale.set(.235,.22,.23);shoulder.position.set(side*.285,1.47,0);shoulder.castShadow=true;fallbackVisuals.add(shoulder);
+    const sleeve=new THREE.Mesh(new THREE.CapsuleGeometry(.115,.43,5,8),cloth);sleeve.position.set(side*.365,1.18,.005);sleeve.rotation.z=-side*.20;sleeve.castShadow=true;fallbackVisuals.add(sleeve);
+    const forearm=new THREE.Mesh(new THREE.CapsuleGeometry(.095,.27,4,8),wrap);forearm.position.set(side*.405,.89,-.015);forearm.rotation.z=-side*.08;forearm.castShadow=true;fallbackVisuals.add(forearm);
+    for(let i=0;i<3;i++){const band=new THREE.Mesh(new THREE.TorusGeometry(.09,.018,5,12),leather);band.scale.set(1,.83,1);band.rotation.x=Math.PI/2;band.position.set(side*(.405+i*.003),.82+i*.065,-.015);fallbackVisuals.add(band)}
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(1,10,8),skinLight);hand.scale.set(.075,.12,.055);hand.position.set(side*.415,.69,-.045);hand.castShadow=true;fallbackVisuals.add(hand);
+    const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.135,.53,4,8),clothDark);leg.position.set(side*.13,.36,.025);leg.castShadow=true;fallbackVisuals.add(leg);
+    const boot=new THREE.Mesh(new THREE.BoxGeometry(.20,.13,.31),clothDark);boot.position.set(side*.13,.095,-.075);boot.castShadow=true;fallbackVisuals.add(boot);
+    const panel=new THREE.Mesh(new THREE.BoxGeometry(.115,.68,.055),cloth);panel.position.set(side*.155,1.08,-.16);panel.rotation.z=side*.08;panel.castShadow=true;fallbackVisuals.add(panel);
+  }
+  const head=new THREE.Mesh(new THREE.SphereGeometry(1,18,14),skinLight);head.scale.set(.165,.205,.155);head.position.set(0,1.72,-.005);head.castShadow=true;fallbackVisuals.add(head);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(.045,.105,7),skin);nose.rotation.x=-Math.PI/2;nose.position.set(0,1.72,-.151);fallbackVisuals.add(nose);
+  const moustache=new THREE.Mesh(new THREE.SphereGeometry(1,10,8),beard);moustache.scale.set(.105,.036,.04);moustache.position.set(0,1.625,-.14);fallbackVisuals.add(moustache);
+  const chinBeard=new THREE.Mesh(new THREE.CylinderGeometry(.105,.012,.36,9,2),beard);chinBeard.position.set(0,1.46,-.135);chinBeard.castShadow=true;fallbackVisuals.add(chinBeard);
+  const belt=new THREE.Mesh(new THREE.TorusGeometry(.27,.035,6,24),leather);belt.rotation.x=Math.PI/2;belt.position.set(0,.91,0);belt.scale.z=1.1;fallbackVisuals.add(belt);
+  const buckle=new THREE.Mesh(new THREE.BoxGeometry(.10,.09,.035),wrap);buckle.position.set(0,.91,-.287);fallbackVisuals.add(buckle);
+  for(let i=0;i<3;i++){const charm=new THREE.Mesh(new THREE.TorusGeometry(.045-i*.006,.012,5,10),leather);charm.rotation.x=Math.PI/2;charm.position.set(.19+i*.07,.78,-.19);fallbackVisuals.add(charm)}
+  const rag=new THREE.Mesh(new THREE.ConeGeometry(.19,.38,8,1,true),clothDark);rag.position.set(-.16,.44,.12);rag.rotation.z=.14;rag.castShadow=true;fallbackVisuals.add(rag);
   const ring=new THREE.Mesh(new THREE.RingGeometry(.34,.42,32),new THREE.MeshBasicMaterial({color:0xff9a45,transparent:true,opacity:.7,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.015;player.add(ring);
   camMount=new THREE.Group();camMount.position.y=CFG.camMountY;player.add(camMount);
+}
+function setAssetStatus(message,isError=false){
+  const node=refs.assetStatus||el('assetStatus');
+  if(node){node.textContent=message;node.style.color=isError?'#ff9a86':'#b6c4b2'}
+}
+function normaliseWarriorRoot(root){
+  root.rotation.y=Math.PI;
+  root.updateMatrixWorld(true);
+  let bounds=new THREE.Box3().setFromObject(root);
+  const size=bounds.getSize(new THREE.Vector3());
+  if(!Number.isFinite(size.y)||size.y<.05)throw new Error('GLB has no valid visible geometry.');
+  root.scale.setScalar(1.82/size.y);root.updateMatrixWorld(true);
+  bounds=new THREE.Box3().setFromObject(root);
+  root.position.x-=((bounds.min.x+bounds.max.x)*.5);
+  root.position.y-=bounds.min.y;
+  root.position.z-=((bounds.min.z+bounds.max.z)*.5);
+  root.updateMatrixWorld(true);
+  return root;
+}
+function registerWarriorAnimations(gltf,root){
+  modelMixer=new THREE.AnimationMixer(root);modelActions=new Map();currentModelAction=null;
+  const clips=Array.isArray(gltf.animations)?gltf.animations:[];
+  for(const clip of clips)modelActions.set(clip.name,modelMixer.clipAction(clip));
+  proceduralBones=[];
+  root.traverse(function(node){
+    if(!node.isBone)return;
+    const normal=node.name.toLowerCase().replace(/[^a-z0-9]/g,'');
+    let role='other';
+    if(normal.includes('leftupleg')||normal.includes('leftthigh')||normal.includes('leftleg'))role='leftLeg';
+    else if(normal.includes('rightupleg')||normal.includes('rightthigh')||normal.includes('rightleg'))role='rightLeg';
+    else if(normal.includes('leftarm')||normal.includes('leftforearm')||normal.includes('leftshoulder'))role='leftArm';
+    else if(normal.includes('rightarm')||normal.includes('rightforearm')||normal.includes('rightshoulder'))role='rightArm';
+    else if(normal.includes('spine')||normal.includes('chest'))role='spine';
+    proceduralBones.push({node:node,role:role,base:node.quaternion.clone()});
+  });
+  playModelAnimation('idle',true);
+  return clips.length;
+}
+function playModelAnimation(name,force=false){
+  if(!modelMixer)return;
+  const patterns={
+    idle:/idle|stand|breath|relax/,
+    walk:/walk|walking|locomotion/,
+    run:/run|jog|sprint/,
+    air:/jump|fall|airborne/,
+    kick:/kick|attack|punch|melee/,
+    knock_down:/knock.?down|knockdown|death|fall.?down/,
+    get_up:/get.?up|stand.?up|rise/
+  };
+  const re=patterns[name]||patterns.idle;
+  const namedActions=Array.from(modelActions.keys()).map(function(key){return {name:key,action:modelActions.get(key)}});
+  let chosen=namedActions.find(function(item){return re.test(item.name.toLowerCase())});
+  if(!chosen&&name==='run')chosen=namedActions.find(function(item){return patterns.walk.test(item.name.toLowerCase())});
+  if(!chosen&&name==='walk')chosen=namedActions.find(function(item){return patterns.run.test(item.name.toLowerCase())});
+  if(!chosen){if(currentModelAction){currentModelAction.fadeOut(.12);currentModelAction=null}return}
+  const next=chosen.action;
+  if(!force&&next===currentModelAction)return;
+  if(currentModelAction&&currentModelAction!==next)currentModelAction.fadeOut(.16);
+  next.reset();next.enabled=true;next.setEffectiveWeight(1);next.setEffectiveTimeScale(name==='run'?1.12:1);next.fadeIn(.16).play();currentModelAction=next;
+}
+function animateProceduralBones(){
+  if(!warriorLoaded||!proceduralBones.length||currentModelAction)return;
+  const moving=state.anim==='walk'||state.anim==='run';
+  const sprint=state.anim==='run';const amp=moving?(sprint?.62:.34):0;const freq=sprint?9:6.2;const phase=clock.elapsedTime*freq;
+  for(const item of proceduralBones){
+    let x=0,z=0;
+    if(item.role==='leftLeg')x=Math.sin(phase)*amp;
+    else if(item.role==='rightLeg')x=Math.sin(phase+Math.PI)*amp;
+    else if(item.role==='leftArm')x=Math.sin(phase+Math.PI)*amp*.72;
+    else if(item.role==='rightArm')x=Math.sin(phase)*amp*.72;
+    else if(item.role==='spine')z=moving?Math.sin(phase*2)*.035:0;
+    const delta=new THREE.Quaternion().setFromEuler(new THREE.Euler(x,0,z,'XYZ'));
+    item.node.quaternion.copy(item.base).multiply(delta);
+  }
+}
+async function attachWarriorModel(gltf,label){
+  const root=gltf.scene||(gltf.scenes&&gltf.scenes[0]);
+  if(!root)throw new Error('The selected file does not contain a glTF scene.');
+  normaliseWarriorRoot(root);
+  root.traverse(function(node){if(node.isMesh){node.castShadow=true;node.receiveShadow=true;if(node.material){const materials=Array.isArray(node.material)?node.material:[node.material];materials.forEach(function(material){material.needsUpdate=true})}}});
+  if(warriorModel){if(modelMixer)modelMixer.stopAllAction();visuals.remove(warriorModel)}
+  visuals.add(root);warriorModel=root;warriorLoaded=true;fallbackVisuals.visible=false;
+  const clips=registerWarriorAnimations(gltf,root);
+  setAssetStatus('Warrior loaded: '+label+' · '+clips+' animation clip(s).');
+  return true;
+}
+async function loadWarriorModel(){
+  try{
+    setAssetStatus('Loading assets/warrior.glb…');
+    const gltf=await new GLTFLoader().loadAsync(new URL('./assets/warrior.glb',document.baseURI).href);
+    await attachWarriorModel(gltf,'assets/warrior.glb');
+  }catch(error){
+    setAssetStatus('No bundled assets/warrior.glb yet — using the playable warrior proxy. Export a rigged GLB or load one below.');
+  }
+}
+function setupWarriorAssetInput(){
+  if(!refs.loadWarriorBtn||!refs.warriorFile)return;
+  refs.loadWarriorBtn.onclick=function(){refs.warriorFile.click()};
+  refs.warriorFile.addEventListener('change',async function(event){
+    const file=event.target.files&&event.target.files[0];if(!file)return;
+    if(!/\.glb$/i.test(file.name)){setAssetStatus('Please select a binary .glb file.',true);return}
+    setAssetStatus('Importing '+file.name+'…');
+    try{
+      const buffer=await file.arrayBuffer();
+      const loader=new GLTFLoader();
+      const gltf=await new Promise(function(resolve,reject){loader.parse(buffer,'',resolve,reject)});
+      await attachWarriorModel(gltf,file.name);
+    }catch(error){setAssetStatus('Could not load '+file.name+': '+(error&&error.message?error.message:'invalid GLB'),true)}
+  });
 }
 function onResize(){if(!camera||!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer?.setSize(innerWidth,innerHeight);}
 
 function setupMenus(){
-  refs.menuBtn.onclick=()=>toggleGameMenu(true);refs.panelClose.onclick=()=>refs.panel.style.display='none';refs.resumeBtn.onclick=()=>toggleGameMenu(false);refs.restartBtn.onclick=()=>{resetPlayer();toggleGameMenu(false)};refs.settingsBtn.onclick=()=>{refs.gameMenu.style.display='none';refs.panel.style.display='block'};refs.mainMenuBtn.onclick=()=>{refs.gameMenu.style.display='none';refs.entry.style.display='flex';state.paused=true};refs.enterBtn.onclick=()=>beginGame(false);refs.demoBtn.onclick=()=>beginGame(true);
+  refs.menuBtn.onclick=()=>toggleGameMenu(true);refs.panelClose.onclick=()=>refs.panel.style.display='none';refs.resumeBtn.onclick=()=>toggleGameMenu(false);refs.restartBtn.onclick=()=>{resetPlayer();toggleGameMenu(false)};refs.settingsBtn.onclick=()=>{refs.gameMenu.style.display='none';refs.panel.style.display='block'};refs.mainMenuBtn.onclick=()=>{refs.gameMenu.style.display='none';refs.entry.style.display='flex';state.paused=true};setupWarriorAssetInput();refs.enterBtn.onclick=()=>beginGame(false);refs.demoBtn.onclick=()=>beginGame(true);
 }
 function toggleGameMenu(show){state.paused=show;refs.gameMenu.style.display=show?'flex':'none';if(show&&document.pointerLockElement===renderer?.domElement)document.exitPointerLock?.()}
 function beginGame(demo){state.paused=false;state.active=true;state.demo=demo;refs.entry.style.display='none';resumeAudio();if(!demo)renderer.domElement.requestPointerLock?.()}
@@ -231,10 +365,26 @@ function rumble(t){const gp=state.gamepad;if(!gp?.vibrationActuator?.playEffect)
 function updatePlayer(dt){
   if(state.paused)return;const inp=readInput();if(inp.jumpNow)jump();const speed=(inp.run?CFG.running:CFG.walking)*inp.mag;const dir=worldDir(inp.ix,inp.iz);if(inp.mag>0.01){state.velocity.x=dir.x*speed;state.velocity.z=dir.z*speed}else{state.velocity.x=damp(state.velocity.x,0,12,dt);state.velocity.z=damp(state.velocity.z,0,12,dt)}
   if(!state.onFloor)state.velocity.y-=CFG.gravity*dt;else if(state.velocity.y<0)state.velocity.y=0;player.position.x+=state.velocity.x*dt;player.position.y+=state.velocity.y*dt;player.position.z+=state.velocity.z*dt;resolveCollisions();const h=Math.hypot(state.velocity.x,state.velocity.z);const locked=performance.now()<state.actionUntil;if(!locked){if(!state.onFloor)state.anim='air';else if(h>CFG.runSpeedThreshold)state.anim='run';else if(h>CFG.walkSpeedThreshold)state.anim='walk';else state.anim='idle';}
+  playModelAnimation(state.anim);
   const visualWorldYaw=h>.03?Math.atan2(state.velocity.x,state.velocity.z):state.cam.yaw;const targetRel=visualWorldYaw-state.cam.yaw;state.visualYaw=lerpAngle(state.visualYaw,targetRel,1-Math.exp(-CFG.visualsRot*dt));player.rotation.y=state.cam.yaw;visuals.rotation.y=state.visualYaw;animateVisuals(dt,h);
   updateFootAudio(dt,h,inp.run);state.wasOnFloor=state.onFloor;
 }
-function animateVisuals(dt,h){const t=clock.elapsedTime;let bob=0,sway=0; if(state.anim==='walk'||state.anim==='run'){const amp=state.anim==='run'?.075:.045;const freq=state.anim==='run'?10:7;bob=Math.sin(t*freq)*amp;sway=Math.cos(t*freq)*amp*.5}visuals.position.y=damp(visuals.position.y,bob*0.6,15,dt);visuals.rotation.z=damp(visuals.rotation.z,sway,10,dt);if(state.anim==='kick'){visuals.rotation.x=damp(visuals.rotation.x,-.32,10,dt)}else if(state.anim==='knock_down'){visuals.rotation.x=damp(visuals.rotation.x,-1.15,8,dt)}else if(state.anim==='get_up'){visuals.rotation.x=damp(visuals.rotation.x,0,5,dt)}else visuals.rotation.x=damp(visuals.rotation.x,0,12,dt)}
+function animateVisuals(dt,h){
+  if(warriorLoaded){
+    visuals.position.y=damp(visuals.position.y,0,12,dt);
+    visuals.rotation.x=0;visuals.rotation.z=0;
+    if(modelMixer)modelMixer.update(dt);
+    animateProceduralBones();
+    return;
+  }
+  const t=clock.elapsedTime;let bob=0,sway=0;
+  if(state.anim==='walk'||state.anim==='run'){const amp=state.anim==='run'?.075:.045;const freq=state.anim==='run'?10:7;bob=Math.sin(t*freq)*amp;sway=Math.cos(t*freq)*amp*.5}
+  visuals.position.y=damp(visuals.position.y,bob*.6,15,dt);visuals.rotation.z=damp(visuals.rotation.z,sway,10,dt);
+  if(state.anim==='kick')visuals.rotation.x=damp(visuals.rotation.x,-.32,10,dt);
+  else if(state.anim==='knock_down')visuals.rotation.x=damp(visuals.rotation.x,-1.15,8,dt);
+  else if(state.anim==='get_up')visuals.rotation.x=damp(visuals.rotation.x,0,5,dt);
+  else visuals.rotation.x=damp(visuals.rotation.x,0,12,dt);
+}
 
 function getCameraPreset(){return {shoulder:{pos:[.358,.482,1.236],mount:1.377},close:{pos:[.46,.24,.95],mount:1.44},wide:{pos:[0,.65,2.35],mount:1.5},tactical:{pos:[0,2.1,3.3],mount:1.75}}[state.selectedCamera]||{pos:[.358,.482,1.236],mount:1.377}}
 function updateCamera(dt){applyCameraInput(dt);const p=getCameraPreset();camMount.position.y=damp(camMount.position.y,p.mount,7,dt);camera.position.set(...p.pos);camera.rotation.order='YXZ';camera.rotation.y=0;camera.rotation.x=0;camMount.rotation.x=state.cam.pitch;camMount.rotation.y=0;
