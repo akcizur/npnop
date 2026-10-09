@@ -1,16 +1,13 @@
-# Warrior GLB asset
+# Generated warrior GLB
 
-The runtime expects the exported character at:
+The GitHub Pages workflow generates `assets/warrior.glb` from the compact procedural builder in `tools/warrior_builder.py.gz` before uploading the static site.
 
-`assets/warrior.glb`
+To generate locally:
 
-This placeholder instructions file is intentionally committed in place of a 3D binary. Export the model from the linked Tripo3D project as a rigged GLB and add the file here when you have the export and redistribution rights.
+```sh
+python -m pip install numpy trimesh
+gzip -dc tools/warrior_builder.py.gz > /tmp/warrior_builder.py
+python /tmp/warrior_builder.py assets/warrior.glb
+```
 
-Recommended checks:
-- GLB contains mesh geometry and material/texture data.
-- A humanoid skeleton and skin weights are present.
-- Embedded clip names are preferably recognizable (`Idle`, `Walk`, `Run`, `Jump`, `Attack`, `GetUp`).
-- Use Mixamo-compatible bone naming for the built-in procedural bone fallback.
-- Keep the file reasonably small for mobile GitHub Pages users; compress or optimize it in Blender or another tool if needed.
-
-The in-page **Load Warrior GLB** picker is useful for previewing the exported file before adding it to the repository. Loading a local file into the browser does not upload or commit it.
+The generated GLB includes a 17-joint skin and seven animation clips: `Idle`, `Walk`, `Run`, `Jump`, `Attack`, `KnockDown` and `GetUp`. The asset is procedural and reference-inspired; it is not the exported Tripo3D page model.

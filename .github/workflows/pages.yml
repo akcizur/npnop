@@ -27,6 +27,18 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Setup Python for the generated character
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate rigged warrior GLB
+        run: |
+          python -m pip install --disable-pip-version-check --quiet numpy trimesh
+          gzip -dc tools/warrior_builder.py.gz > /tmp/warrior_builder.py
+          python /tmp/warrior_builder.py assets/warrior.glb
+          test -s assets/warrior.glb
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:

@@ -5,12 +5,13 @@ A GitHub Pages-ready Three.js third-person web sandbox inspired by [MaximeCrp/th
 ## Runtime
 
 - Three.js 0.160 WebGL runtime loaded from a CDN
-- Procedural world, sky, fog, grid floor, collision obstacles, radar and camera presets
-- Kinematic capsule collision, jump, gravity, sprint, camera-relative movement and pointer-lock camera
+- Procedural world, sky, fog, collision obstacles, radar and camera presets
+- Kinematic capsule collision, jump, gravity, sprint and camera-relative movement
 - Keyboard, Gamepad API and dual touch controls (move joystick + look pad)
-- A stylized procedural warrior fallback so the game remains playable without the external model file
-- Optional rigged GLB character import, animation clip matching and basic bone-driven movement when compatible bone names are available
-- Single-file game runtime in `index.html`; no bundler or npm install is required
+- A custom stylized 3D warrior, automatically generated as a rigged GLB during Pages deployment
+- 17-joint humanoid skeleton with Idle, Walk, Run, Jump, Attack, KnockDown and GetUp clips
+- A procedural in-browser fallback and a **Load Warrior GLB** picker remain available
+- Single-file game runtime in `index.html`
 
 ## Run locally
 
@@ -18,26 +19,25 @@ A GitHub Pages-ready Three.js third-person web sandbox inspired by [MaximeCrp/th
 python3 -m http.server 8000
 ```
 
-Open http://localhost:8000. Opening `index.html` as a `file://` URL is not recommended because browser module and asset loading rules vary.
+Open http://localhost:8000. To generate the bundled warrior locally, install Python 3.12+, NumPy and Trimesh, then run:
+
+```sh
+gzip -dc tools/warrior_builder.py.gz > /tmp/warrior_builder.py
+python -m pip install numpy trimesh
+python /tmp/warrior_builder.py assets/warrior.glb
+```
 
 ## GitHub Pages
 
-The static project deploys through `.github/workflows/pages.yml`. Enable GitHub Pages with **GitHub Actions** as the build and deployment source in the repository settings.
+The `.github/workflows/pages.yml` workflow builds `assets/warrior.glb` and publishes it with the static game. No manually uploaded model is required for this generated character. Enable GitHub Pages with **GitHub Actions** as the deployment source in repository settings.
 
-## Warrior model
+## Character model
 
-On startup, the game tries to load `assets/warrior.glb`. If the file is absent, the procedural warrior fallback remains visible and fully controllable. The landing overlay also has **Load Warrior GLB**, which loads a local `.glb` into the current browser session without uploading it to GitHub.
+The generated Ashen Warden is a stylized recreation inspired by the supplied references: bald head, long ash-grey beard, exposed muscular chest, torn charcoal robes, olive forearm wraps and aged belt charms. The model is generated locally in CI (not downloaded at runtime) and uses standard GLB/glTF 2.0 materials and animation clips.
 
-To include the model in the published site:
+This is an original procedural model, **not a downloaded copy of the Tripo3D model page**. The menu's **Load Warrior GLB** control can still preview a separately exported Tripo GLB in the current browser session. The game loader normalizes model height and applies a 180° Y rotation to align standard GLB forward (+Z) with the controller.
 
-1. Export the warrior from Tripo3D as a **rigged GLB**. For best bone-name compatibility, use a Mixamo-compatible humanoid rig if that option is offered.
-2. Place the exported file at `assets/warrior.glb`.
-3. Commit the GLB to this repository and push to `main`. The Pages workflow publishes the file with the game.
-4. Keep only animation clips that you have permission to distribute. Clip names are matched against common labels such as `idle`, `walk`, `run`, `jump`, `attack`/`kick`, `death`/`knockdown` and `getup`.
-
-The loader normalizes model height to approximately 1.82 m and applies a 180° Y rotation so the character faces the game controller's forward direction. If the exported model faces backward, change `root.rotation.y=Math.PI` in `normaliseWarriorRoot()`.
-
-**Important:** the screenshots and the Tripo model page are not the 3D asset itself. This repository does not yet contain a copy of the model binary; an exported `.glb` needs to be added before GitHub Pages can render this exact character automatically. Check the model's usage and redistribution permissions before committing it.
+The model has 17 joints and per-part rigid weights, suitable for a stylized prototype. It is not a film-quality deformation rig; smooth shoulder/hip weight blending can be improved in Blender later.
 
 ## Controls
 
@@ -47,6 +47,6 @@ Touch: dynamic left joystick for movement, right-side look pad for camera, actio
 
 Gamepad: analog left stick, A/Cross jump, RT/LB/RB/L3 sprint.
 
-## License and assets
+## Asset policy
 
-The controller code is a static web implementation. Third-party packages load from their CDNs and retain their own licenses. Do not commit proprietary models or expiring/private download URLs unless their licenses permit redistribution.
+The generated character is made from procedural geometry. Third-party packages load from their CDNs and retain their own licenses. Do not commit proprietary models or expiring/private download URLs unless their licenses permit redistribution.

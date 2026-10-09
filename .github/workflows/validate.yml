@@ -15,19 +15,49 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 22
+
       - name: Extract runtime module
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
           const html = readFileSync('index.html', 'utf8');
-          const scripts = [...html.matchAll(/<script type="module">([\s\S]*?)<\/script>/g)];
+          const scripts = [...html.matchAll(/<script type="module">([\\s\\S]*?)<\\/script>/g)];
           if (scripts.length !== 1) throw new Error('Expected exactly one runtime module in index.html');
           if (!html.includes('assets/warrior.glb')) throw new Error('Warrior GLB loader path is missing');
           writeFileSync('/tmp/npnop-runtime.mjs', scripts[0][1]);
           NODE
+
       - name: Check JavaScript syntax
         run: node --check /tmp/npnop-runtime.mjs
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate and validate animated GLB
+        run: |
+          python -m pip install --disable-pip-version-check --quiet numpy trimesh
+          gzip -dc tools/warrior_builder.py.gz > /tmp/warrior_builder.py
+          python /tmp/warrior_builder.py /tmp/warrior-validation.glb
+          python - <<'PY'
+          import json, struct
+          path = '/tmp/warrior-validation.glb'
+          with open(path, 'rb') as f:
+              magic, version, total = struct.unpack('<III', f.read(12))
+              assert magic == 0x46546C67 and version == 2 and total > 20
+              length, kind = struct.unpack('<II', f.read(8))
+              assert kind == 0x4E4F534A
+              doc = json.loads(f.read(length).decode('utf-8').rstrip())
+          assert len(doc['skins'][0]['joints']) == 17
+          assert len(doc['meshes'][0]['primitives']) >= 8
+          clips = {a['name'] for a in doc['animations']}
+          expected = {'Idle', 'Walk', 'Run', 'Jump', 'Attack', 'KnockDown', 'GetUp'}
+          assert expected.issubset(clips), f'missing animation clips: {expected - clips}'
+          print('Rigged GLB valid:', len(doc['skins'][0]['joints']), 'bones;', len(clips), 'animation clips')
+          PY

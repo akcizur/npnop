@@ -243,6 +243,9 @@ function playModelAnimation(name,force=false){
   const next=chosen.action;
   if(!force&&next===currentModelAction)return;
   if(currentModelAction&&currentModelAction!==next)currentModelAction.fadeOut(.16);
+  const oneShot=['air','kick','knock_down','get_up'].includes(name);
+  next.setLoop(oneShot?THREE.LoopOnce:THREE.LoopRepeat,oneShot?1:Infinity);
+  next.clampWhenFinished=oneShot;
   next.reset();next.enabled=true;next.setEffectiveWeight(1);next.setEffectiveTimeScale(name==='run'?1.12:1);next.fadeIn(.16).play();currentModelAction=next;
 }
 function animateProceduralBones(){
